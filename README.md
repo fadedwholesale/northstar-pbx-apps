@@ -1,19 +1,18 @@
 # Northstar PBX — Agent & Admin
 
-Two static apps meant for **separate Vercel projects** and **separate origins**.
+Two static apps for **separate Vercel projects** (separate origins). This repo is wired for **one GitHub repo** and two Vercel deployments using different **root directories**.
 
-| Directory | App        | Vercel “Root Directory” |
-| ----------- | ---------- | ------------------------ |
-| `agent/`    | Agent phone | `agent`                 |
-| `admin/`    | Admin portal | `admin`               |
+| Directory | App | Vercel “Root Directory” |
+| --- | --- | --- |
+| `agent/` | Agent phone | `agent` |
+| `admin/` | Admin portal | `admin` |
 
-## Cross-links after deploy
+## Live deployments (current)
 
-1. Deploy **admin** first, copy its URL (e.g. `https://northstar-admin-xxx.vercel.app`).
-2. In `agent/index.html`, set `<meta name="northstar-admin-url" content="PASTE_URL" />`, commit, redeploy agent (or edit in Git and let Vercel rebuild).
-3. Deploy **agent**, copy its URL, set `<meta name="northstar-agent-url" content="PASTE_URL" />` in `admin/index.html`, commit, redeploy admin.
+- **Agent:** [northstar-agent-phone.vercel.app](https://northstar-agent-phone.vercel.app)
+- **Admin:** [admin-rho-black-82.vercel.app](https://admin-rho-black-82.vercel.app) (Vercel auto-assigned alias for project `admin`; rename the project or add a custom domain in Vercel for a cleaner URL.)
 
-The small scripts in each `index.html` wire the top nav links from those meta tags.
+Cross-links use `<meta name="northstar-admin-url">` and `<meta name="northstar-agent-url">` in each `index.html` (already set to the URLs above). Update those values if your production URLs change.
 
 ## Local preview
 
@@ -22,6 +21,8 @@ npx serve agent
 npx serve admin
 ```
 
-## GitHub
+## GitHub + Vercel
 
-Push this repo to GitHub, then connect each Vercel project to the same repository with the root directory set as above.
+Repository: [github.com/fadedwholesale/northstar-pbx-apps](https://github.com/fadedwholesale/northstar-pbx-apps)
+
+Connect each Vercel project to this repo and set **Root Directory** to `agent` or `admin` respectively. Each folder includes `vercel.json` with `outputDirectory: "."` and a no-op `npm run build` so static HTML deploys reliably.

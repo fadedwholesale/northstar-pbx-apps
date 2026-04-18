@@ -1,0 +1,8 @@
+{
+  "name": "northstar-agent-phone",
+  "private": true,
+  "description": "Static agent phone UI — no real build",
+  "scripts": {
+    "build": "echo 'static html' && exit 0"
+  }
+}

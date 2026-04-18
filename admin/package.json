@@ -1,0 +1,8 @@
+{
+  "name": "northstar-admin-portal",
+  "private": true,
+  "description": "Static admin UI — no real build",
+  "scripts": {
+    "build": "echo 'static html' && exit 0"
+  }
+}
