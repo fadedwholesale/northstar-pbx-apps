@@ -294,62 +294,50 @@
     fillAuxPanel(name);
   }
 
-  /** Clicks often hit a Text node inside `<button>` / `<sub>` — those nodes have no `.closest`. */
-  function eventTargetElement(ev) {
-    var n = ev && ev.target;
-    while (n && n.nodeType !== 1) n = n.parentNode;
-    return n || null;
-  }
+  /**
+   * Attach listeners directly on each control (not document delegation).
+   * Safari/WebKit often sets click.target to a Text node inside the button — handlers
+   * bound on the `<button>` still receive the event with currentTarget === button.
+   */
+  var directUiWired = false;
+  function wireDirectUi() {
+    if (directUiWired) return;
+    directUiWired = true;
 
-  /** One capture-phase handler so sidebar + keypad work even if bubble listeners fail (extensions, overlays). */
-  var delegatedClickWired = false;
-  function wireDelegatedUi() {
-    if (delegatedClickWired) return;
-    delegatedClickWired = true;
-    document.addEventListener(
-      'click',
-      function (ev) {
-        var t = eventTargetElement(ev);
-        if (!t || typeof t.closest !== 'function') return;
+    document.querySelectorAll('.sidebar button[data-panel]').forEach(function (btn) {
+      btn.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        var id = btn.getAttribute('data-panel');
+        if (id) showPanel(id, btn);
+      });
+    });
 
-        var navBtn = t.closest('.sidebar button[data-panel]');
-        if (navBtn) {
-          ev.preventDefault();
-          ev.stopPropagation();
-          var pid = navBtn.getAttribute('data-panel');
-          if (pid) showPanel(pid, navBtn);
-          return;
-        }
+    document.querySelectorAll('button.dial-key[data-digit]').forEach(function (key) {
+      key.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        var d = key.getAttribute('data-digit');
+        if (d != null && d !== '') dialPadPress(d);
+      });
+    });
 
-        var dk = t.closest('button.dial-key[data-digit]');
-        if (dk) {
-          ev.preventDefault();
-          ev.stopPropagation();
-          var digit = dk.getAttribute('data-digit');
-          if (digit != null && digit !== '') dialPadPress(digit);
-          return;
-        }
-
-        if (t.closest('#btnPlaceCall')) {
-          ev.preventDefault();
-          ev.stopPropagation();
-          placeCall();
-          return;
-        }
-
-        if (t.closest('#btnDialDel')) {
-          ev.preventDefault();
-          ev.stopPropagation();
-          dialPadDel();
-          return;
-        }
-      },
-      true
-    );
+    var pc = $('btnPlaceCall');
+    if (pc) {
+      pc.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        placeCall();
+      });
+    }
+    var del = $('btnDialDel');
+    if (del) {
+      del.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        dialPadDel();
+      });
+    }
   }
 
   function bindSidebarTabs() {
-    wireDelegatedUi();
+    wireDirectUi();
   }
 
   function fillAuxPanel(name) {
@@ -605,7 +593,7 @@
     filterLeads: filterLeads,
     showPanel: showPanel,
     bindSidebarTabs: bindSidebarTabs,
-    wireDelegatedUi: wireDelegatedUi,
+    wireDirectUi: wireDirectUi,
     dialPadPress: dialPadPress,
     dialPadDel: dialPadDel,
     placeCall: placeCall,
@@ -634,9 +622,16 @@
     else document.addEventListener('DOMContentLoaded', fn);
   }
 
+  var appBooted = false;
   function boot() {
-    wireDelegatedUi();
-    init();
+    wireDirectUi();
+    if (appBooted) return;
+    appBooted = true;
+    try {
+      init();
+    } catch (err) {
+      console.error('[Northstar dialer]', err);
+    }
   }
   onDomReady(boot);
 })(typeof window !== 'undefined' ? window : this);
