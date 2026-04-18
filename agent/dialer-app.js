@@ -294,6 +294,13 @@
     fillAuxPanel(name);
   }
 
+  /** Clicks often hit a Text node inside `<button>` / `<sub>` — those nodes have no `.closest`. */
+  function eventTargetElement(ev) {
+    var n = ev && ev.target;
+    while (n && n.nodeType !== 1) n = n.parentNode;
+    return n || null;
+  }
+
   /** One capture-phase handler so sidebar + keypad work even if bubble listeners fail (extensions, overlays). */
   var delegatedClickWired = false;
   function wireDelegatedUi() {
@@ -302,7 +309,7 @@
     document.addEventListener(
       'click',
       function (ev) {
-        var t = ev.target;
+        var t = eventTargetElement(ev);
         if (!t || typeof t.closest !== 'function') return;
 
         var navBtn = t.closest('.sidebar button[data-panel]');
