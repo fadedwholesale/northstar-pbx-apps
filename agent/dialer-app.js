@@ -265,28 +265,6 @@
     fillAuxPanel(name);
   }
 
-  /** Delegated nav — reliable in Safari vs inline onclick on complex rows */
-  function wireSidebarNav() {
-    var sb = document.querySelector('.sidebar');
-    if (!sb || sb.getAttribute('data-nav-wired') === '1') return;
-    sb.setAttribute('data-nav-wired', '1');
-    sb.addEventListener('click', function (e) {
-      var item = e.target.closest('.ni[data-panel]');
-      if (!item || !sb.contains(item)) return;
-      var panelName = item.getAttribute('data-panel');
-      if (!panelName) return;
-      e.preventDefault();
-      showPanel(panelName, item);
-    });
-    sb.addEventListener('keydown', function (e) {
-      if (e.key !== 'Enter' && e.key !== ' ') return;
-      var item = e.target.closest('.ni[data-panel]');
-      if (!item || !sb.contains(item)) return;
-      e.preventDefault();
-      showPanel(item.getAttribute('data-panel'), item);
-    });
-  }
-
   function fillAuxPanel(name) {
     if (name === 'inbox') renderInbox();
     if (name === 'messages') renderMessages();
@@ -509,8 +487,6 @@
     var bn = $('btnNotif');
     if (bn) bn.onclick = function () { alert('Notifications center — voicemail, mentions, SLA breaches.'); };
 
-    wireSidebarNav();
-
     renderLeads();
     renderTeam();
 
@@ -546,6 +522,10 @@
     saveSettingsFromDom: saveSettingsFromDom,
   };
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-  else init();
+  /** Runs init whether DOMContentLoaded already fired or not (avoids missed registration). */
+  function onDomReady(fn) {
+    if (document.readyState !== 'loading') fn();
+    else document.addEventListener('DOMContentLoaded', fn);
+  }
+  onDomReady(init);
 })(typeof window !== 'undefined' ? window : this);
