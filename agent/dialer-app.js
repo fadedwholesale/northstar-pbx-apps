@@ -237,6 +237,7 @@
     dot.className = 'dot ' + (v === 'available' || v === 'busy' ? 'g' : v === 'dnd' ? 'r' : 'gr');
   }
 
+  /** Tab visibility: class .hidden alone is unreliable with flex/grid; force display. */
   function showPanel(name, el) {
     document.querySelectorAll('.sidebar .ni').forEach(function (n) {
       n.classList.remove('on');
@@ -246,23 +247,65 @@
       el.classList.add('on');
       el.setAttribute('aria-current', 'page');
     }
-    var phone = $('panel-phone');
-    var wrap = $('panel-wrap');
+
+    var phone = document.getElementById('panel-phone');
+    var wrap = document.getElementById('panel-wrap');
     var ms = document.querySelector('.main-stack');
     if (ms) ms.classList.toggle('main-stack--subview', name !== 'phone');
-    var phoneNames = ['phone'];
-    if (phoneNames.indexOf(name) >= 0) {
-      if (phone) phone.classList.remove('hidden');
-      if (wrap) wrap.classList.add('hidden');
+
+    var tabIds = ['inbox', 'messages', 'contacts', 'history', 'apps', 'settings', 'crm'];
+
+    if (name === 'phone') {
+      if (phone) {
+        phone.classList.remove('hidden');
+        phone.style.display = 'grid';
+      }
+      if (wrap) {
+        wrap.classList.add('hidden');
+        wrap.style.display = 'none';
+      }
+      tabIds.forEach(function (p) {
+        var node = document.getElementById('panel-' + p);
+        if (node) {
+          node.style.display = 'none';
+          node.classList.add('hidden');
+        }
+      });
       return;
     }
-    if (phone) phone.classList.add('hidden');
-    if (wrap) wrap.classList.remove('hidden');
-    ['inbox', 'messages', 'contacts', 'history', 'apps', 'settings', 'crm'].forEach(function (p) {
-      var node = $('panel-' + p);
-      if (node) node.classList.toggle('hidden', p !== name);
+
+    if (phone) {
+      phone.classList.add('hidden');
+      phone.style.display = 'none';
+    }
+    if (wrap) {
+      wrap.classList.remove('hidden');
+      wrap.style.display = 'block';
+    }
+
+    tabIds.forEach(function (p) {
+      var node = document.getElementById('panel-' + p);
+      if (!node) return;
+      var on = (p === name);
+      node.classList.toggle('hidden', !on);
+      node.style.display = on ? 'block' : 'none';
     });
+
     fillAuxPanel(name);
+  }
+
+  function bindSidebarTabs() {
+    document.querySelectorAll('.sidebar button[data-panel]').forEach(function (btn) {
+      if (btn.getAttribute('data-bound') === '1') return;
+      btn.setAttribute('data-bound', '1');
+      btn.style.touchAction = 'manipulation';
+      btn.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var id = btn.getAttribute('data-panel');
+        if (id) showPanel(id, btn);
+      });
+    });
   }
 
   function fillAuxPanel(name) {
@@ -445,7 +488,14 @@
   function toggleDtmfPanel() {
     dtmfOpen = !dtmfOpen;
     var el = $('dtmfPanel');
-    if (el) el.classList.toggle('hidden', !dtmfOpen);
+    if (!el) return;
+    if (dtmfOpen) {
+      el.classList.remove('hidden');
+      el.style.removeProperty('display');
+    } else {
+      el.classList.add('hidden');
+      el.style.setProperty('display', 'none', 'important');
+    }
   }
 
   function init() {
@@ -487,6 +537,8 @@
     var bn = $('btnNotif');
     if (bn) bn.onclick = function () { alert('Notifications center — voicemail, mentions, SLA breaches.'); };
 
+    bindSidebarTabs();
+
     renderLeads();
     renderTeam();
 
@@ -500,6 +552,7 @@
     init: init,
     filterLeads: filterLeads,
     showPanel: showPanel,
+    bindSidebarTabs: bindSidebarTabs,
     dialPadPress: dialPadPress,
     dialPadDel: dialPadDel,
     placeCall: placeCall,

@@ -45,41 +45,41 @@
     <div class="body">
       <nav class="sidebar" aria-label="Primary">
         <div class="nl">Communicate</div>
-        <button type="button" class="ni on" data-panel="phone" aria-current="page" tabindex="0" onclick="NSDialer.showPanel('phone',this)">
+        <button type="button" class="ni on" data-panel="phone" aria-current="page" tabindex="0">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3.5 2C3.5 2 2 3 2 4.5c0 7 6.5 9.5 6.5 9.5s6.5-2.5 6.5-9.5C15 3 13.5 2 13.5 2S12 3 12 4.5c0 .5.2 1 .5 1.3C12 7 11 8 11 8s1 1 2.2 1.5c.3-.3.8-.5 1.3-.5C16 9 17 10.5 17 10.5S15.5 14 8 14 2 10.5 2 10.5 3.5 9 4.8 9c.5 0 1 .2 1.3.5C7 8 8 7 8 7s-1-1-2.5-2.2c.3-.3.5-.8.5-1.3C6 3 4.5 2 4.5 2z" stroke="currentColor" stroke-width="1"/></svg>
           Phone
         </button>
-        <button type="button" class="ni" data-panel="inbox" tabindex="0" onclick="NSDialer.showPanel('inbox',this)">
+        <button type="button" class="ni" data-panel="inbox" tabindex="0">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M5 7h6M5 10h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
           Inbox
         </button>
-        <button type="button" class="ni" data-panel="messages" tabindex="0" onclick="NSDialer.showPanel('messages',this)">
+        <button type="button" class="ni" data-panel="messages" tabindex="0">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4h10v8H5l-2 2V4z" stroke="currentColor" stroke-width="1.2"/></svg>
           Text
         </button>
 
         <div class="nl">Contacts</div>
-        <button type="button" class="ni" data-panel="contacts" tabindex="0" onclick="NSDialer.showPanel('contacts',this)">
+        <button type="button" class="ni" data-panel="contacts" tabindex="0">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5" r="2.5" stroke="currentColor" stroke-width="1.2"/><path d="M3 13c0-2.5 2.5-4 5-4s5 1.5 5 4" stroke="currentColor" stroke-width="1.2"/></svg>
           Directory & CRM
         </button>
-        <button type="button" class="ni" data-panel="history" tabindex="0" onclick="NSDialer.showPanel('history',this)">
+        <button type="button" class="ni" data-panel="history" tabindex="0">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 4h12M2 8h8M2 12h10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
           Call history
         </button>
 
         <div class="nl">Productivity</div>
-        <button type="button" class="ni" data-panel="apps" tabindex="0" onclick="NSDialer.showPanel('apps',this)">
+        <button type="button" class="ni" data-panel="apps" tabindex="0">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/></svg>
           Apps
         </button>
-        <button type="button" class="ni" data-panel="crm" tabindex="0" onclick="NSDialer.showPanel('crm',this)">
+        <button type="button" class="ni" data-panel="crm" tabindex="0">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.2"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
           CRM sync
         </button>
 
         <div class="nl">Device</div>
-        <button type="button" class="ni" data-panel="settings" tabindex="0" onclick="NSDialer.showPanel('settings',this)">
+        <button type="button" class="ni" data-panel="settings" tabindex="0">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.2"/><path d="M8 1v2M8 13v2M3 3l1.5 1.5M11.5 11.5L13 13M1 8h2M13 8h2M3 13l1.5-1.5M11.5 4.5L13 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
           Settings
         </button>
@@ -88,12 +88,16 @@
       <div class="main-stack">
         <div class="agent-body" id="panel-phone">
           <div class="main-col">
-            <!-- Dial pad -->
-            <div class="card dial-card">
-              <div class="card-hd">
+            <!-- Dial pad — collapsible on narrow screens -->
+            <details class="card dial-card dial-details" open>
+              <summary class="dial-details-summary">
                 <span class="lbl">Dialer</span>
-                <span style="font-size:11px;color:#6b7280">Outbound caller ID</span>
-              </div>
+                <span class="dial-details-meta">
+                  <span style="font-size:11px;color:#6b7280">Outbound caller ID</span>
+                  <span class="dial-details-hint" aria-hidden="true">▼</span>
+                </span>
+              </summary>
+              <div class="dial-details-body">
               <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:8px">
                 <label style="font-size:11px;color:#6b7280">Line</label>
                 <select id="lineSel" onchange="NorthstarTelephony.setLine(this.value)" style="font-size:12px;padding:6px 10px">
@@ -121,7 +125,8 @@
                 <button type="button" class="btn-call" id="btnPlaceCall" onclick="NSDialer.placeCall()">📞 Call</button>
                 <button type="button" class="db" style="padding:10px 14px" onclick="NSDialer.dialPadDel()">⌫</button>
               </div>
-            </div>
+              </div>
+            </details>
 
             <!-- Idle / active -->
             <div class="card" id="idleCall">
@@ -245,7 +250,7 @@
           </div>
         </div>
 
-        <div id="panel-wrap" class="hidden" style="flex:1;padding:16px;overflow-y:auto;min-height:400px">
+        <div id="panel-wrap" class="hidden panel-wrap">
           <div id="panel-inbox" class="hidden"></div>
           <div id="panel-messages" class="hidden"></div>
           <div id="panel-contacts" class="hidden"></div>

@@ -211,3 +211,100 @@ select{border:0.5px solid var(--color-border-tertiary, #e5e7eb);border-radius:va
 .stat-box{background:var(--color-background-secondary, #f9fafb);border-radius:var(--border-radius-md, 8px);padding:12px;border:0.5px solid var(--color-border-tertiary, #e5e7eb)}
 .stat-box .num{font-size:20px;font-weight:600;color:#111827}
 .stat-box .lbl{font-size:10px;color:#9ca3af;text-transform:none;letter-spacing:0;margin-top:4px}
+
+/* Auxiliary panels scroll region */
+#panel-wrap.panel-wrap{
+  flex:1 1 auto;
+  min-height:min(72vh,720px);
+  min-width:0;
+  padding:16px;
+  overflow-y:auto;
+}
+
+/* Dial pad — collapsible row (mobile); full card on desktop */
+.dial-details summary.dial-details-summary{
+  list-style:none;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  cursor:pointer;
+  user-select:none;
+  -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;
+}
+.dial-details summary::-webkit-details-marker{display:none}
+.dial-details-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.dial-details-hint{font-size:10px;color:#9ca3af;display:inline-block;transition:transform .15s ease}
+.dial-details:not([open]) .dial-details-hint{transform:rotate(-90deg)}
+.dial-details-body{display:grid;gap:10px;padding-top:2px}
+@media (min-width:769px){
+  .dial-details-summary{pointer-events:none;cursor:default}
+  .dial-details-hint{display:none}
+}
+
+/* Touch-friendly controls */
+.ni,.dial-key,.cb,.btn-call,.db,.icon-btn,.qbtn{touch-action:manipulation}
+
+/* Narrow screens — stack layout, readable dial pad */
+@media (max-width:900px){
+  .body{
+    grid-template-columns:1fr;
+    min-height:auto;
+  }
+  .sidebar{
+    flex-direction:row;
+    flex-wrap:wrap;
+    padding:8px 8px 10px;
+    gap:6px;
+    border-right:none;
+    border-bottom:0.5px solid var(--color-border-tertiary,#e5e7eb);
+    align-items:stretch;
+  }
+  .nl{width:100%;margin-top:4px;margin-bottom:2px}
+  .nl:first-child{margin-top:0}
+  .ni{
+    flex:1 1 calc(50% - 6px);
+    min-height:44px;
+    justify-content:flex-start;
+    padding:10px 12px;
+    border-right:2px solid transparent;
+    border-radius:var(--border-radius-md,8px);
+  }
+  .ni.on{
+    border-right-color:transparent;
+    border-right:2px solid transparent;
+    background:var(--color-background-primary,#fff);
+    box-shadow:0 0 0 1px var(--color-border-info,#93c5fd);
+  }
+  .agent-body{
+    grid-template-columns:1fr;
+  }
+  .main-col{padding:12px}
+  .side-col{
+    border-left:none;
+    border-top:0.5px solid var(--color-border-tertiary,#e5e7eb);
+    padding:14px 12px;
+  }
+  .dial-grid{
+    max-width:none;
+    width:100%;
+    gap:10px;
+  }
+  .dial-key{
+    min-height:48px;
+    padding:16px 8px;
+  }
+  .topnav{
+    flex-wrap:wrap;
+    gap:8px;
+    align-items:flex-start;
+  }
+  .topnav-inner{
+    order:3;
+    width:100%;
+    margin:0;
+    max-width:none;
+  }
+  .search-mini{max-width:none}
+}
