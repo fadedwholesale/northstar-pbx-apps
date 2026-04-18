@@ -4,3 +4,12 @@
 *.log
 .env
 .env.*
+
+# Legacy copies in repo root (canonical apps live in agent/ and admin/)
+/dialer.html
+/admin.html
+/dialer-app.js
+/admin-app.js
+/crm-store.js
+/telephony-layer.js
+/shared.css
