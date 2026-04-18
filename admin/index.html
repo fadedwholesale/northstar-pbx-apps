@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- After agent app deploys, set content to that production URL (https://...) -->
+  <meta name="northstar-agent-url" content="" />
+  <title>Northstar — Admin</title>
+  <link rel="stylesheet" href="shared.css" />
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      var m = document.querySelector('meta[name="northstar-agent-url"]');
+      var u = m && m.getAttribute('content') && m.getAttribute('content').trim();
+      var el = document.getElementById('linkAgentPhone');
+      if (el && u) el.href = u;
+    });
+  </script>
+</head>
+<body style="padding:16px;background:#f3f4f6">
+  <div class="shell">
+    <div class="topnav" style="flex-wrap:wrap;gap:10px">
+      <div class="logo">Northstar Admin <span>Telephony & CRM</span></div>
+      <nav class="admin-nav" aria-label="Admin sections">
+        <button type="button" class="on" data-adm="overview" onclick="adminGo('overview')">Overview</button>
+        <button type="button" data-adm="telephony" onclick="adminGo('telephony')">Live monitor</button>
+        <button type="button" data-adm="users" onclick="adminGo('users')">Users & ext.</button>
+        <button type="button" data-adm="numbers" onclick="adminGo('numbers')">Numbers</button>
+        <button type="button" data-adm="queues" onclick="adminGo('queues')">Queues & IVR</button>
+        <button type="button" data-adm="analytics" onclick="adminGo('analytics')">Analytics</button>
+        <button type="button" data-adm="recordings" onclick="adminGo('recordings')">Recording / legal</button>
+        <button type="button" data-adm="crm" onclick="adminGo('crm')">CRM</button>
+        <button type="button" data-adm="integrations" onclick="adminGo('integrations')">Integrations</button>
+        <button type="button" data-adm="company" onclick="adminGo('company')">Company</button>
+      </nav>
+      <div style="display:flex;align-items:center;gap:12px;margin-left:auto">
+        <a id="linkAgentPhone" href="#" style="font-size:11px;color:#6b7280;text-decoration:none" title="Set meta northstar-agent-url to your agent deployment">← Agent phone</a>
+        <div class="user-pill">
+          <div class="av av-sm" style="background:#fef3c7;color:#92400e">AM</div>
+          <span>Super admin</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Overview -->
+    <div id="adm-overview" class="mgr-body admin-section on">
+      <div class="mgr-top">
+        <div class="mgr-card">
+          <div class="mgr-val">158</div>
+          <div class="mgr-lbl">Inbound + outbound legs today</div>
+          <div class="mgr-delta">CDR source: carrier / SIP</div>
+        </div>
+        <div class="mgr-card">
+          <div class="mgr-val">36</div>
+          <div class="mgr-lbl">Answered / connected</div>
+          <div class="mgr-delta">Connect rate 22.8%</div>
+        </div>
+        <div class="mgr-card">
+          <div class="mgr-val">9</div>
+          <div class="mgr-lbl">Booked appointments (CRM)</div>
+          <div class="mgr-delta" style="color:#f59e0b">— disposition mapped</div>
+        </div>
+        <div class="mgr-card">
+          <div class="mgr-val">1</div>
+          <div class="mgr-lbl">Recorded coaching samples</div>
+          <div class="mgr-delta">Retention policy applied</div>
+        </div>
+      </div>
+
+      <div class="sec-hd">Live queue & seats</div>
+      <div class="seats-grid">
+        <div class="seat oncall">
+          <div class="seat-top">
+            <div class="av av-md">JD</div>
+            <div class="seat-info">
+              <div class="seat-name">James D. · Ext 102</div>
+              <div class="seat-role" style="display:flex;align-items:center;gap:5px"><span class="dot g"></span> On call · outbound leg</div>
+            </div>
+            <button type="button" class="db blu" style="font-size:10px;padding:4px 8px;width:auto" onclick="alert('Barge / whisper / monitor — bridge supervisor via carrier.')">Monitor</button>
+          </div>
+          <div class="seat-stats">
+            <div class="ss"><div class="ssv">39</div><div class="ssl">Dials</div></div>
+            <div class="ss"><div class="ssv">9</div><div class="ssl">Ans</div></div>
+            <div class="ss"><div class="ssv">2</div><div class="ssl">Appts</div></div>
+            <div class="ss"><div class="ssv">0</div><div class="ssl">QA flags</div></div>
+          </div>
+          <div class="seat-bar"><div class="seat-fill" style="width:72%;background:#22c55e"></div></div>
+        </div>
+
+        <div class="seat oncall">
+          <div class="seat-top">
+            <div class="av av-md" style="background:#ecfdf5;color:#065f46">SR</div>
+            <div class="seat-info">
+              <div class="seat-name">Sara R. · Ext 103</div>
+              <div class="seat-role" style="display:flex;align-items:center;gap:5px"><span class="dot g"></span> Available</div>
+            </div>
+            <button type="button" class="db blu" style="font-size:10px;padding:4px 8px;width:auto" onclick="alert('Skill-based queue membership')">Queues</button>
+          </div>
+          <div class="seat-stats">
+            <div class="ss"><div class="ssv">52</div><div class="ssl">Dials</div></div>
+            <div class="ss"><div class="ssv">14</div><div class="ssl">Ans</div></div>
+            <div class="ss"><div class="ssv">5</div><div class="ssl">Appts</div></div>
+            <div class="ss"><div class="ssv">1</div><div class="ssl">Closes</div></div>
+          </div>
+          <div class="seat-bar"><div class="seat-fill" style="width:91%;background:#22c55e"></div></div>
+        </div>
+
+        <div class="seat brk">
+          <div class="seat-top">
+            <div class="av av-md" style="background:#fffbeb;color:#b45309">MC</div>
+            <div class="seat-info">
+              <div class="seat-name">Marcus C. · Ext 104</div>
+              <div class="seat-role" style="display:flex;align-items:center;gap:5px"><span class="dot a"></span> Break (ACD paused)</div>
+            </div>
+            <button type="button" class="db" style="font-size:10px;padding:4px 8px;width:auto" onclick="alert('Supervisor message / Teams ping')">Ping</button>
+          </div>
+          <div class="seat-stats">
+            <div class="ss"><div class="ssv">29</div><div class="ssl">Dials</div></div>
+            <div class="ss"><div class="ssv">7</div><div class="ssl">Ans</div></div>
+            <div class="ss"><div class="ssv">1</div><div class="ssl">Appts</div></div>
+            <div class="ss"><div class="ssv">0</div><div class="ssl">Closes</div></div>
+          </div>
+          <div class="seat-bar"><div class="seat-fill" style="width:38%;background:#f59e0b"></div></div>
+        </div>
+
+        <div class="seat off">
+          <div class="seat-top">
+            <div class="av av-md" style="background:#f3f4f6;color:#9ca3af">TL</div>
+            <div class="seat-info">
+              <div class="seat-name">Tanya L. · Ext 105</div>
+              <div class="seat-role" style="display:flex;align-items:center;gap:5px"><span class="dot gr"></span> Offline</div>
+            </div>
+            <button type="button" class="db" style="font-size:10px;padding:4px 8px;width:auto">License</button>
+          </div>
+          <div class="seat-stats">
+            <div class="ss"><div class="ssv">0</div><div class="ssl">Dials</div></div>
+            <div class="ss"><div class="ssv">0</div><div class="ssl">Ans</div></div>
+            <div class="ss"><div class="ssv">0</div><div class="ssl">Appts</div></div>
+            <div class="ss"><div class="ssv">0</div><div class="ssl">Closes</div></div>
+          </div>
+          <div class="seat-bar"><div class="seat-fill" style="width:0%"></div></div>
+        </div>
+
+        <button type="button" class="add-seat" onclick="alert('Provision seat: Twilio/Telnyx SIP creds + extension + CRM tenant mapping.')">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.2"/><path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          Add licensed seat
+        </button>
+      </div>
+
+      <div class="live-calls">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px">
+          <div class="sec-hd" style="margin:0">Organization call log (today)</div>
+          <div style="display:flex;gap:8px">
+            <button type="button" class="qbtn" style="width:auto;margin:0;font-size:11px" onclick="exportcdr()">Export CDR CSV</button>
+            <button type="button" class="qbtn" style="width:auto;margin:0;font-size:11px" onclick="exportCrm()">Export CRM JSON</button>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th><th>Direction</th><th>Agent</th><th>Party</th><th>Queue</th><th>Duration</th><th>Disposition</th><th>Recording</th>
+            </tr>
+          </thead>
+          <tbody id="adminCallRows">
+            <tr><td>09:14</td><td>Inbound</td><td>Queue</td><td>(210) 555-0900</td><td>Sales</td><td>0:45</td><td><span class="pill pill-a">Abandoned</span></td><td>—</td></tr>
+            <tr><td>09:22</td><td>Outbound</td><td>Sara R.</td><td>SA Luxury Detail</td><td>—</td><td>4:22</td><td><span class="pill pill-g">Booked</span></td><td><span style="color:#2563eb;cursor:pointer">▶</span></td></tr>
+            <tr><td>09:31</td><td>Outbound</td><td>Sara R.</td><td>El Rancho Grill</td><td>—</td><td>2:08</td><td><span class="pill pill-a">Callback</span></td><td><span style="color:#2563eb;cursor:pointer">▶</span></td></tr>
+            <tr><td>09:44</td><td>Outbound</td><td>James D.</td><td>78255 Plumbing</td><td>—</td><td>1:44</td><td><span class="pill pill-r">Not interested</span></td><td><span style="color:#2563eb;cursor:pointer">▶</span></td></tr>
+            <tr><td>10:02</td><td>Outbound</td><td>Marcus C.</td><td>Southside Roofing</td><td>—</td><td>3:51</td><td><span class="pill pill-g">Booked</span></td><td><span style="color:#2563eb;cursor:pointer">▶</span></td></tr>
+            <tr><td>Now</td><td>Outbound</td><td>James D.</td><td>Mike's Pro Detailing</td><td>—</td><td><span style="color:#22c55e;font-weight:500">Live</span></td><td><span class="pill pill-b">Open</span></td><td><span style="color:#9ca3af">—</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Live monitor -->
+    <div id="adm-telephony" class="mgr-body admin-section">
+      <div class="panel">
+        <div class="sec-hd">Supervision</div>
+        <p class="hint">Production ties to carrier APIs for live calls in progress, queue position, and agent leg IDs for compliant bridge-in.</p>
+        <div class="stat-subgrid" style="margin-top:12px">
+          <div class="stat-box"><div class="num">3</div><div class="lbl">Active conversations</div></div>
+          <div class="stat-box"><div class="num">7</div><div class="lbl">Waiting in queue</div></div>
+          <div class="stat-box"><div class="num">42s</div><div class="lbl">Longest wait</div></div>
+          <div class="stat-box"><div class="num">5%</div><div class="lbl">Abandon (rolling)</div></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="sec-hd">Emergency & maintenance</div>
+        <button type="button" class="qbtn" style="width:auto;display:inline-block;margin-right:8px" onclick="alert('Close queues — plays emergency greeting andoverflow to failover DID.')">Close queues</button>
+        <button type="button" class="qbtn" style="width:auto;display:inline-block" onclick="alert('Failover trunk — route all PSTN to backup carrier.')">Enable failover</button>
+      </div>
+    </div>
+
+    <!-- Users -->
+    <div id="adm-users" class="mgr-body admin-section">
+      <div class="panel">
+        <div class="sec-hd">Directory</div>
+        <p class="hint">Sync users from SSO (OIDC/SCIM). Phone profile stores extension, outbound caller ID policy, recording eligibility, and queue memberships.</p>
+        <table class="data-table">
+          <thead><tr><th>Name</th><th>Extension</th><th>Role</th><th>Recording</th><th>Presence policy</th><th></th></tr></thead>
+          <tbody>
+            <tr><td>James D.</td><td class="mono">102</td><td>Agent</td><td>Allow</td><td>ACD controlled</td><td><button type="button" class="db blu" style="font-size:10px;padding:4px 8px">Edit</button></td></tr>
+            <tr><td>Sara R.</td><td class="mono">103</td><td>Agent</td><td>Allow</td><td>ACD controlled</td><td><button type="button" class="db blu" style="font-size:10px;padding:4px 8px">Edit</button></td></tr>
+            <tr><td>Marcus C.</td><td class="mono">104</td><td>Agent</td><td>Allow</td><td>ACD controlled</td><td><button type="button" class="db blu" style="font-size:10px;padding:4px 8px">Edit</button></td></tr>
+            <tr><td>Ops Admin</td><td class="mono">200</td><td>Supervisor</td><td>Monitor</td><td>Always on</td><td><button type="button" class="db blu" style="font-size:10px;padding:4px 8px">Edit</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Numbers -->
+    <div id="adm-numbers" class="mgr-body admin-section">
+      <div class="panel">
+        <div class="sec-hd">Number inventory</div>
+        <table class="data-table">
+          <thead><tr><th>DID</th><th>Type</th><th>Routes to</th><th>SMS</th><th>E911</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">+1 (210) 555-0140</td><td>Main</td><td>Auto-attendant</td><td>Enabled</td><td>Linked HQ</td></tr>
+            <tr><td class="mono">+1 (210) 555-0199</td><td>Campaign</td><td>Outbound pool — agents</td><td>Off</td><td>N/A</td></tr>
+            <tr><td class="mono">+1 (210) 555-0144</td><td>Fax</td><td>Fax inbox</td><td>—</td><td>Linked HQ</td></tr>
+          </tbody>
+        </table>
+        <p class="hint">Order/port numbers via carrier; store compliance packets for local dialing regulations.</p>
+      </div>
+    </div>
+
+    <!-- Queues -->
+    <div id="adm-queues" class="mgr-body admin-section">
+      <div class="panel">
+        <div class="sec-hd">Call queues</div>
+        <table class="data-table">
+          <thead><tr><th>Queue</th><th>Strategy</th><th>SLA target</th><th>Overflow</th></tr></thead>
+          <tbody>
+            <tr><td>Sales</td><td>Longest idle agent</td><td>Answer &lt; 60s</td><td>Voicemail</td></tr>
+            <tr><td>Support</td><td>Round robin</td><td>Answer &lt; 120s</td><td>Callback offer</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="panel">
+        <div class="sec-hd">IVR & hours</div>
+        <p class="hint">Business hours → holiday sets → menu tree (Play prompt → Gather DTMF → Route to queue/user/voicemail). Implement in Contact Flow / Twilio Studio / FreeSWITCH dialplan.</p>
+        <button type="button" class="qbtn" style="width:auto" onclick="alert('Open visual IVR builder (import/export JSON).')">Open flow builder</button>
+      </div>
+    </div>
+
+    <!-- Analytics -->
+    <div id="adm-analytics" class="mgr-body admin-section">
+      <div class="stat-subgrid">
+        <div class="stat-box"><div class="num">92%</div><div class="lbl">Service level (60s)</div></div>
+        <div class="stat-box"><div class="num">48s</div><div class="lbl">Avg speed of answer</div></div>
+        <div class="stat-box"><div class="num">11%</div><div class="lbl">Abandon rate</div></div>
+        <div class="stat-box"><div class="num">3.4</div><div class="lbl">Occupancy (avg)</div></div>
+      </div>
+      <div class="panel" style="margin-top:14px">
+        <div class="sec-hd">Exports</div>
+        <button type="button" class="qbtn" style="width:auto;margin-right:8px;display:inline-block" onclick="exportcdr()">CDR export</button>
+        <button type="button" class="qbtn" style="width:auto;display:inline-block" onclick="alert('Wallboard dashboard — wire to Prometheus / Looker / Metabase.')">Wallboard link</button>
+      </div>
+    </div>
+
+    <!-- Recordings -->
+    <div id="adm-recordings" class="mgr-body admin-section">
+      <div class="panel">
+        <div class="sec-hd">Policies</div>
+        <ul style="font-size:12px;line-height:1.7;color:#374151;padding-left:18px">
+          <li>Dual-consent states: play disclosure prompt on connect for outbound campaigns.</li>
+          <li>Retention: move recordings to cold storage after 90 days; purge per schedule.</li>
+          <li>PCI: pause recording when agents collect card data (DTMF masking).</li>
+          <li>QA: sample 2% for coaching; encrypt at rest (KMS).</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <div class="sec-hd">Controls</div>
+        <div class="switch-row"><span>Organisation-wide recording default</span><input type="checkbox" checked /></div>
+        <div class="switch-row"><span>Allow agent stop/start (jurisdictional)</span><input type="checkbox" checked /></div>
+      </div>
+    </div>
+
+    <!-- CRM -->
+    <div id="adm-crm" class="mgr-body admin-section">
+      <div class="toolbar" style="margin-bottom:14px">
+        <button type="button" onclick="NorthstarCRM.seedDemo(); refreshCrmView();">Reload store</button>
+        <button type="button" onclick="exportCrm()">Download JSON export</button>
+        <button type="button" onclick="if(confirm('Reset demo data?')){ NorthstarCRM.resetDemo(); refreshCrmView(); }">Reset demo</button>
+      </div>
+      <div class="crm-grid">
+        <div>
+          <div class="panel">
+            <div class="sec-hd">Contacts</div>
+            <div class="crm-list" id="crmContacts"></div>
+          </div>
+          <div class="panel">
+            <div class="sec-hd">Activities from dialer</div>
+            <div id="crmActivities" style="max-height:360px;overflow-y:auto"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="sec-hd">Pipeline stages</div>
+          <ul id="crmStages" style="font-size:12px;line-height:1.7;padding-left:18px;color:#374151"></ul>
+          <div class="sec-hd" style="margin-top:16px">Field mapping</div>
+          <p class="hint">Map dispositions → CRM stages; push recording URL + CDR id for audit.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Integrations -->
+    <div id="adm-integrations" class="mgr-body admin-section">
+      <div class="panel">
+        <div class="sec-hd">Carrier / CPaaS</div>
+        <p class="hint">Store API keys server-side only. Rotate quarterly.</p>
+        <div class="set-row" style="margin-top:10px"><label class="hint">Account SID / API key</label><input type="password" value="••••••••••••" readonly style="max-width:320px;padding:8px;border-radius:8px;border:1px solid #e5e7eb" /></div>
+      </div>
+      <div class="panel">
+        <div class="sec-hd">CRM webhook</div>
+        <p class="hint">POST JSON on disposition with HMAC signature <code>X-Northstar-Signature</code>.</p>
+        <input id="webhookEp" type="text" readonly style="width:100%;max-width:480px;padding:8px;border-radius:8px;border:1px solid #e5e7eb;font-family:monospace;font-size:11px" value="https://api.yourdomain.com/webhooks/northstar" />
+      </div>
+      <div class="panel">
+        <div class="sec-hd">SCIM / SSO</div>
+        <p class="hint">Azure AD / Okta user provisioning; map groups → roles & queue membership.</p>
+      </div>
+    </div>
+
+    <!-- Company -->
+    <div id="adm-company" class="mgr-body admin-section">
+      <div class="panel">
+        <div class="sec-hd">Emergency calling (E911)</div>
+        <p class="hint">Register dispatchable location for each site using DIDs; update on moves (Kari's Law / RAY BAUM's Act compliance).</p>
+        <div class="settings-grid" style="margin-top:10px">
+          <div class="set-row"><label>Street</label><input type="text" value="123 Commerce St" /></div>
+          <div class="set-row"><label>City / State / ZIP</label><input type="text" value="San Antonio, TX 78205" /></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="sec-hd">Tenant profile</div>
+        <p style="font-size:12px;color:#374151">Legal name, tax ID, main billing number, support escalation contacts.</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="crm-store.js"></script>
+  <script src="admin-app.js"></script>
+</body>
+</html>

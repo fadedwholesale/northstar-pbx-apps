@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- After admin deploys, set content to that production URL (https://...) -->
+  <meta name="northstar-admin-url" content="" />
+  <title>Northstar — Phone</title>
+  <link rel="stylesheet" href="shared.css" />
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      var m = document.querySelector('meta[name="northstar-admin-url"]');
+      var u = m && m.getAttribute('content') && m.getAttribute('content').trim();
+      var el = document.getElementById('linkAdminPortal');
+      if (el && u) el.href = u;
+    });
+  </script>
+</head>
+<body style="padding:16px;background:#f3f4f6">
+  <div class="shell">
+    <div class="topnav">
+      <div class="logo">Northstar <span>Cloud PBX</span></div>
+      <div class="topnav-inner">
+        <span class="ext-pill">Ext. <strong id="extDisplay">102</strong></span>
+        <div class="search-mini">
+          <input type="search" id="globalSearch" placeholder="Search directory or dial a number…" autocomplete="off" />
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="badge" title="Northstar CRM">CRM</span>
+        <button type="button" class="icon-btn" id="btnNotif" aria-label="Notifications">🔔</button>
+        <a id="linkAdminPortal" href="#" style="font-size:11px;color:#6b7280;text-decoration:none" title="Set meta northstar-admin-url to your admin deployment">Admin</a>
+        <div class="user-pill">
+          <div class="dot g" id="sd"></div>
+          <div class="av av-sm" id="userAv">JD</div>
+          <span id="userName">James D.</span>
+          <select id="agentPresence" onchange="NSDialer.setPresenceSel(this)">
+            <option value="available">Available</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="body">
+      <div class="sidebar">
+        <div class="nl">Communicate</div>
+        <div class="ni on" data-panel="phone" onclick="NSDialer.showPanel('phone',this)">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3.5 2C3.5 2 2 3 2 4.5c0 7 6.5 9.5 6.5 9.5s6.5-2.5 6.5-9.5C15 3 13.5 2 13.5 2S12 3 12 4.5c0 .5.2 1 .5 1.3C12 7 11 8 11 8s1 1 2.2 1.5c.3-.3.8-.5 1.3-.5C16 9 17 10.5 17 10.5S15.5 14 8 14 2 10.5 2 10.5 3.5 9 4.8 9c.5 0 1 .2 1.3.5C7 8 8 7 8 7s-1-1-2.5-2.2c.3-.3.5-.8.5-1.3C6 3 4.5 2 4.5 2z" stroke="currentColor" stroke-width="1"/></svg>
+          Phone
+        </div>
+        <div class="ni" data-panel="inbox" onclick="NSDialer.showPanel('inbox',this)">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M5 7h6M5 10h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+          Inbox
+        </div>
+        <div class="ni" data-panel="messages" onclick="NSDialer.showPanel('messages',this)">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4h10v8H5l-2 2V4z" stroke="currentColor" stroke-width="1.2"/></svg>
+          Text
+        </div>
+
+        <div class="nl">Contacts</div>
+        <div class="ni" data-panel="contacts" onclick="NSDialer.showPanel('contacts',this)">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5" r="2.5" stroke="currentColor" stroke-width="1.2"/><path d="M3 13c0-2.5 2.5-4 5-4s5 1.5 5 4" stroke="currentColor" stroke-width="1.2"/></svg>
+          Directory & CRM
+        </div>
+        <div class="ni" data-panel="history" onclick="NSDialer.showPanel('history',this)">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 4h12M2 8h8M2 12h10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+          Call history
+        </div>
+
+        <div class="nl">Productivity</div>
+        <div class="ni" data-panel="apps" onclick="NSDialer.showPanel('apps',this)">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/></svg>
+          Apps
+        </div>
+        <div class="ni" data-panel="crm" onclick="NSDialer.showPanel('crm',this)">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.2"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+          CRM sync
+        </div>
+
+        <div class="nl">Device</div>
+        <div class="ni" data-panel="settings" onclick="NSDialer.showPanel('settings',this)">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.2"/><path d="M8 1v2M8 13v2M3 3l1.5 1.5M11.5 11.5L13 13M1 8h2M13 8h2M3 13l1.5-1.5M11.5 4.5L13 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+          Settings
+        </div>
+      </div>
+
+      <div class="main-stack">
+        <div class="agent-body" id="panel-phone">
+          <div class="main-col">
+            <!-- Dial pad -->
+            <div class="card dial-card">
+              <div class="card-hd">
+                <span class="lbl">Dialer</span>
+                <span style="font-size:11px;color:#6b7280">Outbound caller ID</span>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:8px">
+                <label style="font-size:11px;color:#6b7280">Line</label>
+                <select id="lineSel" onchange="NorthstarTelephony.setLine(this.value)" style="font-size:12px;padding:6px 10px">
+                  <option value="line1">Main — (210) 555-0140</option>
+                  <option value="line2">Campaigns — (210) 555-0199</option>
+                </select>
+                <select id="callerIdSel" style="font-size:12px;padding:6px 10px"></select>
+              </div>
+              <input type="text" class="dial-field" id="dialInput" inputmode="tel" autocomplete="off" placeholder="Enter number or extension" />
+              <div class="dial-grid">
+                <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('1')">1<sub></sub></button>
+                <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('2')">2<sub>ABC</sub></button>
+                <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('3')">3<sub>DEF</sub></button>
+                <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('4')">4<sub>GHI</sub></button>
+                <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('5')">5<sub>JKL</sub></button>
+                <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('6')">6<sub>MNO</sub></button>
+                <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('7')">7<sub>PQRS</sub></button>
+                <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('8')">8<sub>TUV</sub></button>
+                <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('9')">9<sub>WXYZ</sub></button>
+                <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('*')">*</button>
+                <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('0')">0<sub>+</sub></button>
+                <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('#')">#</button>
+              </div>
+              <div class="dial-actions">
+                <button type="button" class="btn-call" id="btnPlaceCall" onclick="NSDialer.placeCall()">📞 Call</button>
+                <button type="button" class="db" style="padding:10px 14px" onclick="NSDialer.dialPadDel()">⌫</button>
+              </div>
+            </div>
+
+            <!-- Idle / active -->
+            <div class="card" id="idleCall">
+              <div class="card-hd"><span class="lbl">Active session</span></div>
+              <p style="font-size:13px;color:#6b7280">No active call. Dial a number, extension, or choose a lead below.</p>
+              <button type="button" class="qbtn" style="margin-top:10px;width:auto;font-size:11px" onclick="NorthstarTelephony.simulateInboundRing(); alert('Inbound UX: toast + Answer / Decline bound to SIP/WebRTC INVITE.')">Simulate inbound ring</button>
+            </div>
+
+            <div class="card hidden" id="activeCallCard">
+              <div id="confBanner" class="banner-soft hidden">Conference: dial second participant, then tap Merge.</div>
+              <div class="card-hd">
+                <span class="lbl">Active call</span>
+                <span class="timer" id="timer">00:00:00</span>
+              </div>
+              <div class="call-contact">
+                <div class="av av-md" id="cAv">JD</div>
+                <div>
+                  <div class="call-name" id="cName">—</div>
+                  <div class="call-sub" id="cSub">—</div>
+                </div>
+              </div>
+              <div class="sec-hd" style="margin-top:4px">Primary controls</div>
+              <div class="ctrls">
+                <button type="button" class="cb" id="muteBtn" onclick="NSDialer.toggleMute()"><span class="ci">🔇</span><span>Mute</span></button>
+                <button type="button" class="cb" id="holdBtn" onclick="NSDialer.toggleHold()"><span class="ci">⏸</span><span>Hold</span></button>
+                <button type="button" class="cb blu" onclick="NSDialer.openTransfer('warm')"><span class="ci">↗</span><span>Warm xfer</span></button>
+                <button type="button" class="cb blu" onclick="NSDialer.openTransfer('blind')"><span class="ci">⇢</span><span>Blind xfer</span></button>
+                <button type="button" class="cb" id="recBtn" onclick="NSDialer.toggleRec()"><span class="ci" id="recIco">⏺</span><span>Record</span></button>
+                <button type="button" class="cb red" onclick="NSDialer.hangup()"><span class="ci">✕</span><span>End</span></button>
+              </div>
+              <div class="sec-hd" style="margin-top:10px">Advanced</div>
+              <div class="ctrls-2">
+                <button type="button" class="cb" onclick="NSDialer.toggleDtmfPanel()"><span class="ci">⌨</span><span>Keypad</span></button>
+                <button type="button" class="cb" onclick="NSDialer.conferenceAdd()"><span class="ci">👥</span><span>Add call</span></button>
+                <button type="button" class="cb" onclick="NSDialer.mergeCalls()"><span class="ci">⎇</span><span>Merge</span></button>
+                <button type="button" class="cb" onclick="NSDialer.flip()"><span class="ci">📱</span><span>Flip</span></button>
+                <button type="button" class="cb" onclick="NSDialer.parkCall()"><span class="ci">P</span><span>Park</span></button>
+              </div>
+              <div id="dtmfPanel" class="hidden">
+                <div class="sec-hd" style="margin-top:10px">Send DTMF</div>
+                <div class="dtmf-pop">
+                  <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('1')">1</button>
+                  <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('2')">2</button>
+                  <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('3')">3</button>
+                  <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('4')">4</button>
+                  <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('5')">5</button>
+                  <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('6')">6</button>
+                  <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('7')">7</button>
+                  <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('8')">8</button>
+                  <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('9')">9</button>
+                  <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('*')">*</button>
+                  <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('0')">0</button>
+                  <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('#')">#</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="card" id="recCard" style="display:none">
+              <div style="display:flex;align-items:center;gap:8px">
+                <div class="dot r" style="animation:pulse 1s infinite"></div>
+                <span style="font-size:12px;font-weight:500;color:#111827">Recording on</span>
+              </div>
+              <div style="font-size:11px;color:#6b7280;margin-top:4px">Compliance: announce states with two-party consent where required.</div>
+            </div>
+
+            <div class="card">
+              <div class="sec-hd">CRM notes</div>
+              <textarea id="notes" placeholder="Disposition saves notes to Northstar CRM…"></textarea>
+              <div class="sec-hd" style="margin-top:10px">Disposition</div>
+              <div class="dg">
+                <button type="button" class="db bk" onclick="NSDialer.logDispo('Appointment Booked')">✓ Appointment booked</button>
+                <button type="button" class="db na" onclick="NSDialer.logDispo('No Answer')">↩ No answer</button>
+                <button type="button" class="db ni2" onclick="NSDialer.logDispo('Not Interested')">✕ Not interested</button>
+                <button type="button" class="db cb2" onclick="NSDialer.logDispo('Callback Scheduled')">🕐 Callback</button>
+                <button type="button" class="db vm" onclick="NSDialer.logDispo('Voicemail Left')">✉ Voicemail</button>
+                <button type="button" class="db wr" onclick="NSDialer.logDispo('Wrong Number')">⊘ Wrong #</button>
+              </div>
+            </div>
+
+            <div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <div class="sec-hd" style="margin:0">Lead queue</div>
+                <select onchange="NSDialer.filterLeads(this.value)">
+                  <option value="all">All verticals</option>
+                  <option value="Detailing">Detailing</option>
+                  <option value="Restaurant">Restaurant</option>
+                  <option value="Contractor">Contractor</option>
+                </select>
+              </div>
+              <div id="leadList"></div>
+            </div>
+          </div>
+
+          <div class="side-col">
+            <div>
+              <div class="sec-hd">Today</div>
+              <div class="sg">
+                <div class="sc"><div class="sv" id="sDials">39</div><div class="sl">Dials</div></div>
+                <div class="sc"><div class="sv" id="sContacts">9</div><div class="sl">Contacts</div></div>
+                <div class="sc"><div class="sv" id="sAppts">2</div><div class="sl">Appts</div></div>
+                <div class="sc"><div class="sv" id="sCloses">0</div><div class="sl">Closes</div></div>
+              </div>
+            </div>
+
+            <div>
+              <div class="sec-hd">HUD — team presence</div>
+              <div id="teamList"></div>
+            </div>
+
+            <div>
+              <div class="sec-hd">Meeting</div>
+              <button type="button" class="qbtn" onclick="alert('Schedule video: integrate RingCentral Video / Zoom / Teams links from admin.')">Schedule / Join meeting</button>
+            </div>
+
+            <div>
+              <div class="sec-hd">Fax</div>
+              <button type="button" class="qbtn" onclick="alert('Cloud fax requires eFax provider + cover sheet templates.')">Send fax…</button>
+            </div>
+
+            <input type="file" id="leadCsv" class="hidden" accept=".csv" onchange="if(this.files[0]) alert('POST to /api/leads: ' + this.files[0].name)" />
+          </div>
+        </div>
+
+        <div id="panel-wrap" class="hidden" style="flex:1;padding:16px;overflow-y:auto;min-height:400px">
+          <div id="panel-inbox" class="hidden"></div>
+          <div id="panel-messages" class="hidden"></div>
+          <div id="panel-contacts" class="hidden"></div>
+          <div id="panel-history" class="hidden"></div>
+          <div id="panel-apps" class="hidden"></div>
+          <div id="panel-crm" class="hidden"></div>
+          <div id="panel-settings" class="hidden"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="crm-store.js"></script>
+  <script src="telephony-layer.js"></script>
+  <script src="dialer-app.js"></script>
+</body>
+</html>
