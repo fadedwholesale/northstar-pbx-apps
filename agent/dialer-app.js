@@ -1,5 +1,5 @@
 /* global NorthstarCRM, NorthstarTelephony */
-(function () {
+(function (global) {
   var AGENT = { id: 'agent_jd', name: 'James D.', initials: 'JD' };
   var leads = [
     { biz: "Mike's Pro Detailing", name: 'Mike Pena', phone: '(210) 555-0182', vert: 'Detailing', tag: 'td', active: true },
