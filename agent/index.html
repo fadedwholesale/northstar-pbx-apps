@@ -3,18 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- After admin deploys, set content to that production URL (https://...) -->
-  <meta name="northstar-admin-url" content="https://admin-rho-black-82.vercel.app" />
   <title>Northstar — Phone</title>
   <link rel="stylesheet" href="shared.css" />
-  <script>
-    document.addEventListener('DOMContentLoaded', function () {
-      var m = document.querySelector('meta[name="northstar-admin-url"]');
-      var u = m && m.getAttribute('content') && m.getAttribute('content').trim();
-      var el = document.getElementById('linkAdminPortal');
-      if (el && u) el.href = u;
-    });
-  </script>
 </head>
 <body style="padding:16px;background:#f3f4f6">
   <div class="shell">
@@ -30,12 +20,11 @@
         <span class="badge" title="Northstar CRM">CRM</span>
         <span class="badge" style="background:#ecfdf5;color:#047857" title="Voice: Twilio Programmable Voice + Client JS">Twilio</span>
         <button type="button" class="icon-btn" id="btnNotif" aria-label="Notifications">🔔</button>
-        <a id="linkAdminPortal" href="#" style="font-size:11px;color:#6b7280;text-decoration:none" title="Set meta northstar-admin-url to your admin deployment">Admin</a>
         <div class="user-pill">
           <div class="dot g" id="sd"></div>
           <div class="av av-sm" id="userAv">JD</div>
           <span id="userName">James D.</span>
-          <select id="agentPresence" onchange="NSDialer.setPresenceSel(this)">
+          <select id="agentPresence">
             <option value="available">Available</option>
           </select>
         </div>
@@ -100,7 +89,7 @@
               <div class="dial-details-body">
               <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:8px">
                 <label style="font-size:11px;color:#6b7280">Line</label>
-                <select id="lineSel" onchange="NorthstarTelephony.setLine(this.value)" style="font-size:12px;padding:6px 10px">
+                <select id="lineSel" style="font-size:12px;padding:6px 10px">
                   <option value="line1">Main — (210) 555-0140</option>
                   <option value="line2">Campaigns — (210) 555-0199</option>
                 </select>
@@ -108,22 +97,22 @@
               </div>
               <input type="text" class="dial-field" id="dialInput" inputmode="tel" autocomplete="off" placeholder="Enter number or extension" />
               <div class="dial-grid">
-                <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('1')">1<sub></sub></button>
-                <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('2')">2<sub>ABC</sub></button>
-                <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('3')">3<sub>DEF</sub></button>
-                <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('4')">4<sub>GHI</sub></button>
-                <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('5')">5<sub>JKL</sub></button>
-                <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('6')">6<sub>MNO</sub></button>
-                <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('7')">7<sub>PQRS</sub></button>
-                <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('8')">8<sub>TUV</sub></button>
-                <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('9')">9<sub>WXYZ</sub></button>
-                <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('*')">*</button>
-                <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('0')">0<sub>+</sub></button>
-                <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('#')">#</button>
+                <button type="button" class="dial-key" data-digit="1">1<sub></sub></button>
+                <button type="button" class="dial-key" data-digit="2">2<sub>ABC</sub></button>
+                <button type="button" class="dial-key" data-digit="3">3<sub>DEF</sub></button>
+                <button type="button" class="dial-key" data-digit="4">4<sub>GHI</sub></button>
+                <button type="button" class="dial-key" data-digit="5">5<sub>JKL</sub></button>
+                <button type="button" class="dial-key" data-digit="6">6<sub>MNO</sub></button>
+                <button type="button" class="dial-key" data-digit="7">7<sub>PQRS</sub></button>
+                <button type="button" class="dial-key" data-digit="8">8<sub>TUV</sub></button>
+                <button type="button" class="dial-key" data-digit="9">9<sub>WXYZ</sub></button>
+                <button type="button" class="dial-key" data-digit="*">*</button>
+                <button type="button" class="dial-key" data-digit="0">0<sub>+</sub></button>
+                <button type="button" class="dial-key" data-digit="#">#</button>
               </div>
               <div class="dial-actions">
-                <button type="button" class="btn-call" id="btnPlaceCall" onclick="NSDialer.placeCall()">📞 Call</button>
-                <button type="button" class="db" style="padding:10px 14px" onclick="NSDialer.dialPadDel()">⌫</button>
+                <button type="button" class="btn-call" id="btnPlaceCall">📞 Call</button>
+                <button type="button" class="db" id="btnDialDel" style="padding:10px 14px">⌫</button>
               </div>
               </div>
             </details>
@@ -168,18 +157,18 @@
               <div id="dtmfPanel" class="hidden">
                 <div class="sec-hd" style="margin-top:10px">Send DTMF</div>
                 <div class="dtmf-pop">
-                  <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('1')">1</button>
-                  <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('2')">2</button>
-                  <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('3')">3</button>
-                  <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('4')">4</button>
-                  <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('5')">5</button>
-                  <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('6')">6</button>
-                  <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('7')">7</button>
-                  <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('8')">8</button>
-                  <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('9')">9</button>
-                  <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('*')">*</button>
-                  <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('0')">0</button>
-                  <button type="button" class="dial-key" onclick="NSDialer.dialPadPress('#')">#</button>
+                  <button type="button" class="dial-key" data-digit="1">1</button>
+                  <button type="button" class="dial-key" data-digit="2">2</button>
+                  <button type="button" class="dial-key" data-digit="3">3</button>
+                  <button type="button" class="dial-key" data-digit="4">4</button>
+                  <button type="button" class="dial-key" data-digit="5">5</button>
+                  <button type="button" class="dial-key" data-digit="6">6</button>
+                  <button type="button" class="dial-key" data-digit="7">7</button>
+                  <button type="button" class="dial-key" data-digit="8">8</button>
+                  <button type="button" class="dial-key" data-digit="9">9</button>
+                  <button type="button" class="dial-key" data-digit="*">*</button>
+                  <button type="button" class="dial-key" data-digit="0">0</button>
+                  <button type="button" class="dial-key" data-digit="#">#</button>
                 </div>
               </div>
             </div>

@@ -294,18 +294,55 @@
     fillAuxPanel(name);
   }
 
+  /** One capture-phase handler so sidebar + keypad work even if bubble listeners fail (extensions, overlays). */
+  var delegatedClickWired = false;
+  function wireDelegatedUi() {
+    if (delegatedClickWired) return;
+    delegatedClickWired = true;
+    document.addEventListener(
+      'click',
+      function (ev) {
+        var t = ev.target;
+        if (!t || typeof t.closest !== 'function') return;
+
+        var navBtn = t.closest('.sidebar button[data-panel]');
+        if (navBtn) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          var pid = navBtn.getAttribute('data-panel');
+          if (pid) showPanel(pid, navBtn);
+          return;
+        }
+
+        var dk = t.closest('button.dial-key[data-digit]');
+        if (dk) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          var digit = dk.getAttribute('data-digit');
+          if (digit != null && digit !== '') dialPadPress(digit);
+          return;
+        }
+
+        if (t.closest('#btnPlaceCall')) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          placeCall();
+          return;
+        }
+
+        if (t.closest('#btnDialDel')) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          dialPadDel();
+          return;
+        }
+      },
+      true
+    );
+  }
+
   function bindSidebarTabs() {
-    document.querySelectorAll('.sidebar button[data-panel]').forEach(function (btn) {
-      if (btn.getAttribute('data-bound') === '1') return;
-      btn.setAttribute('data-bound', '1');
-      btn.style.touchAction = 'manipulation';
-      btn.addEventListener('click', function (ev) {
-        ev.preventDefault();
-        ev.stopPropagation();
-        var id = btn.getAttribute('data-panel');
-        if (id) showPanel(id, btn);
-      });
-    });
+    wireDelegatedUi();
   }
 
   function fillAuxPanel(name) {
@@ -510,6 +547,16 @@
       pres.innerHTML = NorthstarTelephony.getPresenceList().map(function (p) {
         return '<option value="' + esc(p.id) + '"' + (p.id === 'available' ? ' selected' : '') + '>' + esc(p.label) + '</option>';
       }).join('');
+      pres.addEventListener('change', function () {
+        setPresenceSel(pres);
+      });
+    }
+
+    var lineSel = $('lineSel');
+    if (lineSel) {
+      lineSel.addEventListener('change', function () {
+        NorthstarTelephony.setLine(lineSel.value);
+      });
     }
 
     var cid = $('callerIdSel');
@@ -537,8 +584,6 @@
     var bn = $('btnNotif');
     if (bn) bn.onclick = function () { alert('Notifications center — voicemail, mentions, SLA breaches.'); };
 
-    bindSidebarTabs();
-
     renderLeads();
     renderTeam();
 
@@ -553,6 +598,7 @@
     filterLeads: filterLeads,
     showPanel: showPanel,
     bindSidebarTabs: bindSidebarTabs,
+    wireDelegatedUi: wireDelegatedUi,
     dialPadPress: dialPadPress,
     dialPadDel: dialPadDel,
     placeCall: placeCall,
@@ -580,5 +626,10 @@
     if (document.readyState !== 'loading') fn();
     else document.addEventListener('DOMContentLoaded', fn);
   }
-  onDomReady(init);
+
+  function boot() {
+    wireDelegatedUi();
+    init();
+  }
+  onDomReady(boot);
 })(typeof window !== 'undefined' ? window : this);

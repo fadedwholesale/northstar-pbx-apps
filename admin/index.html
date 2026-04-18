@@ -3,18 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- After agent app deploys, set content to that production URL (https://...) -->
-  <meta name="northstar-agent-url" content="https://northstar-agent-phone.vercel.app" />
   <title>Northstar — Admin</title>
   <link rel="stylesheet" href="shared.css" />
-  <script>
-    document.addEventListener('DOMContentLoaded', function () {
-      var m = document.querySelector('meta[name="northstar-agent-url"]');
-      var u = m && m.getAttribute('content') && m.getAttribute('content').trim();
-      var el = document.getElementById('linkAgentPhone');
-      if (el && u) el.href = u;
-    });
-  </script>
 </head>
 <body style="padding:16px;background:#f3f4f6">
   <div class="shell">
@@ -33,7 +23,6 @@
         <button type="button" data-adm="company" onclick="adminGo('company')">Company</button>
       </nav>
       <div style="display:flex;align-items:center;gap:12px;margin-left:auto">
-        <a id="linkAgentPhone" href="#" style="font-size:11px;color:#6b7280;text-decoration:none" title="Set meta northstar-agent-url to your agent deployment">← Agent phone</a>
         <div class="user-pill">
           <div class="av av-sm" style="background:#fef3c7;color:#92400e">AM</div>
           <span>Super admin</span>
