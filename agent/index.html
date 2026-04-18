@@ -28,6 +28,7 @@
       </div>
       <div style="display:flex;align-items:center;gap:10px">
         <span class="badge" title="Northstar CRM">CRM</span>
+        <span class="badge" style="background:#ecfdf5;color:#047857" title="Voice: Twilio Programmable Voice + Client JS">Twilio</span>
         <button type="button" class="icon-btn" id="btnNotif" aria-label="Notifications">🔔</button>
         <a id="linkAdminPortal" href="#" style="font-size:11px;color:#6b7280;text-decoration:none" title="Set meta northstar-admin-url to your admin deployment">Admin</a>
         <div class="user-pill">
@@ -42,47 +43,47 @@
     </div>
 
     <div class="body">
-      <div class="sidebar">
+      <nav class="sidebar" aria-label="Primary">
         <div class="nl">Communicate</div>
-        <div class="ni on" data-panel="phone" onclick="NSDialer.showPanel('phone',this)">
+        <button type="button" class="ni on" data-panel="phone" aria-current="page" tabindex="0">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3.5 2C3.5 2 2 3 2 4.5c0 7 6.5 9.5 6.5 9.5s6.5-2.5 6.5-9.5C15 3 13.5 2 13.5 2S12 3 12 4.5c0 .5.2 1 .5 1.3C12 7 11 8 11 8s1 1 2.2 1.5c.3-.3.8-.5 1.3-.5C16 9 17 10.5 17 10.5S15.5 14 8 14 2 10.5 2 10.5 3.5 9 4.8 9c.5 0 1 .2 1.3.5C7 8 8 7 8 7s-1-1-2.5-2.2c.3-.3.5-.8.5-1.3C6 3 4.5 2 4.5 2z" stroke="currentColor" stroke-width="1"/></svg>
           Phone
-        </div>
-        <div class="ni" data-panel="inbox" onclick="NSDialer.showPanel('inbox',this)">
+        </button>
+        <button type="button" class="ni" data-panel="inbox" tabindex="0">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M5 7h6M5 10h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
           Inbox
-        </div>
-        <div class="ni" data-panel="messages" onclick="NSDialer.showPanel('messages',this)">
+        </button>
+        <button type="button" class="ni" data-panel="messages" tabindex="0">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4h10v8H5l-2 2V4z" stroke="currentColor" stroke-width="1.2"/></svg>
           Text
-        </div>
+        </button>
 
         <div class="nl">Contacts</div>
-        <div class="ni" data-panel="contacts" onclick="NSDialer.showPanel('contacts',this)">
+        <button type="button" class="ni" data-panel="contacts" tabindex="0">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5" r="2.5" stroke="currentColor" stroke-width="1.2"/><path d="M3 13c0-2.5 2.5-4 5-4s5 1.5 5 4" stroke="currentColor" stroke-width="1.2"/></svg>
           Directory & CRM
-        </div>
-        <div class="ni" data-panel="history" onclick="NSDialer.showPanel('history',this)">
+        </button>
+        <button type="button" class="ni" data-panel="history" tabindex="0">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 4h12M2 8h8M2 12h10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
           Call history
-        </div>
+        </button>
 
         <div class="nl">Productivity</div>
-        <div class="ni" data-panel="apps" onclick="NSDialer.showPanel('apps',this)">
+        <button type="button" class="ni" data-panel="apps" tabindex="0">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/></svg>
           Apps
-        </div>
-        <div class="ni" data-panel="crm" onclick="NSDialer.showPanel('crm',this)">
+        </button>
+        <button type="button" class="ni" data-panel="crm" tabindex="0">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.2"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
           CRM sync
-        </div>
+        </button>
 
         <div class="nl">Device</div>
-        <div class="ni" data-panel="settings" onclick="NSDialer.showPanel('settings',this)">
+        <button type="button" class="ni" data-panel="settings" tabindex="0">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.2"/><path d="M8 1v2M8 13v2M3 3l1.5 1.5M11.5 11.5L13 13M1 8h2M13 8h2M3 13l1.5-1.5M11.5 4.5L13 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
           Settings
-        </div>
-      </div>
+        </button>
+      </nav>
 
       <div class="main-stack">
         <div class="agent-body" id="panel-phone">
@@ -232,7 +233,7 @@
 
             <div>
               <div class="sec-hd">Meeting</div>
-              <button type="button" class="qbtn" onclick="alert('Schedule video: integrate RingCentral Video / Zoom / Teams links from admin.')">Schedule / Join meeting</button>
+              <button type="button" class="qbtn" onclick="alert('Optional: Twilio Video or embed Zoom/Teams links from admin.')">Schedule / Join meeting</button>
             </div>
 
             <div>

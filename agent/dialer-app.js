@@ -238,23 +238,53 @@
   }
 
   function showPanel(name, el) {
-    document.querySelectorAll('.sidebar .ni').forEach(function (n) { n.classList.remove('on'); });
-    if (el) el.classList.add('on');
+    document.querySelectorAll('.sidebar .ni').forEach(function (n) {
+      n.classList.remove('on');
+      n.removeAttribute('aria-current');
+    });
+    if (el) {
+      el.classList.add('on');
+      el.setAttribute('aria-current', 'page');
+    }
     var phone = $('panel-phone');
     var wrap = $('panel-wrap');
+    var ms = document.querySelector('.main-stack');
+    if (ms) ms.classList.toggle('main-stack--subview', name !== 'phone');
     var phoneNames = ['phone'];
     if (phoneNames.indexOf(name) >= 0) {
-      phone.classList.remove('hidden');
-      wrap.classList.add('hidden');
+      if (phone) phone.classList.remove('hidden');
+      if (wrap) wrap.classList.add('hidden');
       return;
     }
-    phone.classList.add('hidden');
-    wrap.classList.remove('hidden');
+    if (phone) phone.classList.add('hidden');
+    if (wrap) wrap.classList.remove('hidden');
     ['inbox', 'messages', 'contacts', 'history', 'apps', 'settings', 'crm'].forEach(function (p) {
       var node = $('panel-' + p);
       if (node) node.classList.toggle('hidden', p !== name);
     });
     fillAuxPanel(name);
+  }
+
+  /** Delegated nav — reliable in Safari vs inline onclick on complex rows */
+  function wireSidebarNav() {
+    var sb = document.querySelector('.sidebar');
+    if (!sb || sb.getAttribute('data-nav-wired') === '1') return;
+    sb.setAttribute('data-nav-wired', '1');
+    sb.addEventListener('click', function (e) {
+      var item = e.target.closest('.ni[data-panel]');
+      if (!item || !sb.contains(item)) return;
+      var panelName = item.getAttribute('data-panel');
+      if (!panelName) return;
+      e.preventDefault();
+      showPanel(panelName, item);
+    });
+    sb.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var item = e.target.closest('.ni[data-panel]');
+      if (!item || !sb.contains(item)) return;
+      e.preventDefault();
+      showPanel(item.getAttribute('data-panel'), item);
+    });
   }
 
   function fillAuxPanel(name) {
@@ -287,7 +317,7 @@
       { when: 'Yesterday', num: '(210) 555-0443', name: 'SA Luxury Detail', missed: true },
     ];
     $('panel-inbox').innerHTML =
-      '<div class="panel"><div class="sec-hd">Voicemail</div><p class="hint">Backed by carrier VM / SIP provider. UI mirrors RingCentral voicemail controls.</p><div id="vmList"></div></div>' +
+      '<div class="panel"><div class="sec-hd">Voicemail</div><p class="hint">Wire to Twilio Voicemail API / Recording URLs or carrier VM. Playback uses signed media URLs.</p><div id="vmList"></div></div>' +
       '<div class="panel"><div class="sec-hd">Missed calls</div><div id="missList"></div></div>';
     $('vmList').innerHTML = vm.map(function (v) {
       return '<div class="inbox-row">' +
@@ -478,6 +508,8 @@
 
     var bn = $('btnNotif');
     if (bn) bn.onclick = function () { alert('Notifications center — voicemail, mentions, SLA breaches.'); };
+
+    wireSidebarNav();
 
     renderLeads();
     renderTeam();

@@ -1,10 +1,10 @@
 /**
- * Northstar Telephony Layer — RingCentral-class surface area for production swap-in.
+ * Northstar Telephony Layer — PBX-style API for production swap-in.
  *
- * Replace internals with:
- * - RingCentral Embeddable / Web Phone SDK, or
- * - Twilio Voice JS + TaskRouter, or
- * - Telnyx WebRTC, etc.
+ * Primary target: Twilio Programmable Voice + Twilio Voice JavaScript SDK
+ * (token from your backend; Device.connect / Call objects).
+ *
+ * Alternatives: Telnyx WebRTC, Vonage, etc.
  *
  * Events: subscribe(handler) → { type, payload }
  */
