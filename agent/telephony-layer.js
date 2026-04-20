@@ -27,6 +27,30 @@
     } catch (e) {}
   }
 
+  /** Readable string for alerts/logging when err.message is missing (e.g. some Twilio/HTTP errors). */
+  function formatErr(err) {
+    if (err == null) return 'Unknown error';
+    if (typeof err === 'string') return err;
+    var msg = err.message || err.msg || err.error_description;
+    var code = err.code;
+    var name = err.name;
+    var parts = [];
+    if (msg) parts.push(String(msg));
+    else if (err.error && typeof err.error === 'string') parts.push(err.error);
+    if (code != null && code !== '' && String(code) !== String(msg)) parts.push('code ' + code);
+    if (name && name !== 'Error' && !parts.join(' ').includes(name)) parts.push(name);
+    if (parts.length) return parts.join(' — ');
+    try {
+      var s = JSON.stringify(err);
+      if (s && s !== '{}') return s;
+    } catch (e) {}
+    if (typeof err.toString === 'function') {
+      var ts = err.toString();
+      if (ts !== '[object Object]') return ts;
+    }
+    return 'Unknown error';
+  }
+
   var state = {
     presence: 'available', // available | busy | dnd | invisible | offline
     lineId: 'line1',
@@ -140,7 +164,7 @@
     });
 
     call.on('error', function (error) {
-      state.provider.twilioLastError = error && error.message ? error.message : String(error);
+      state.provider.twilioLastError = formatErr(error);
       emit('error', { message: state.provider.twilioLastError });
     });
   }
@@ -161,7 +185,7 @@
     });
 
     device.on('error', function (error) {
-      state.provider.twilioLastError = error && error.message ? error.message : String(error);
+      state.provider.twilioLastError = formatErr(error);
       emit('provider', { mode: state.provider.mode, error: state.provider.twilioLastError });
       emit('error', { message: state.provider.twilioLastError });
     });
@@ -352,7 +376,12 @@
       });
       setupTwilioDeviceEventBridge(device);
       state.twilioDevice = device;
-      await device.register();
+      try {
+        await device.register();
+      } catch (regErr) {
+        state.provider.twilioDeviceRegistered = false;
+        throw new Error(formatErr(regErr));
+      }
       state.provider.twilioDeviceRegistered = true;
       state.provider.mode = 'twilio-registered';
       emit('provider', { mode: state.provider.mode });
@@ -400,9 +429,15 @@
 
       var response = await client.functions.invoke(functionName, { body: payload });
       if (response.error) {
-        state.provider.twilioLastError = response.error.message || String(response.error);
+        state.provider.twilioLastError = formatErr(response.error);
         emit('provider', { mode: state.provider.mode, error: state.provider.twilioLastError });
-        throw response.error;
+        throw new Error(state.provider.twilioLastError);
+      }
+
+      if (response.data && response.data.error && !response.data.token) {
+        state.provider.twilioLastError = formatErr(response.data.error);
+        emit('provider', { mode: state.provider.mode, error: state.provider.twilioLastError });
+        throw new Error(state.provider.twilioLastError);
       }
 
       var token = response.data && response.data.token ? response.data.token : null;
@@ -493,7 +528,7 @@
           state.twilioCall = call;
           attachTwilioCallEvents(call);
         }).catch(function (error) {
-          state.provider.twilioLastError = error && error.message ? error.message : String(error);
+          state.provider.twilioLastError = formatErr(error);
           emit('error', { message: state.provider.twilioLastError });
           emit('provider', { mode: state.provider.mode, error: state.provider.twilioLastError });
           state.activeCall = null;
@@ -610,6 +645,8 @@
     simulateInboundRing: function () {
       emit('call', { phase: 'ringing', from: '(210) 555-0900', name: 'Inbound queue' });
     },
+
+    formatError: formatErr,
   };
 
   global.NorthstarTelephony = Telephony;

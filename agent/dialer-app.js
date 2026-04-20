@@ -173,9 +173,15 @@
         })
         .catch(function (err) {
           console.error('[Northstar dialer] Voice not ready:', err);
+          var detail =
+            typeof NorthstarTelephony.formatError === 'function'
+              ? NorthstarTelephony.formatError(err)
+              : err && err.message
+                ? err.message
+                : String(err);
           alert(
             'Voice could not start: ' +
-              (err && err.message ? err.message : String(err)) +
+              detail +
               '\n\nAllow microphone access if prompted, then try again.'
           );
         });

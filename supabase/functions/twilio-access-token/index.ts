@@ -1,3 +1,5 @@
+import twilio from "npm:twilio@5.4.2";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -8,30 +10,6 @@ function requiredEnv(name: string): string {
   const value = Deno.env.get(name);
   if (!value) throw new Error(`Missing required env var: ${name}`);
   return value;
-}
-
-function base64UrlEncode(input: Uint8Array): string {
-  let binary = "";
-  for (let i = 0; i < input.byteLength; i++) {
-    binary += String.fromCharCode(input[i]);
-  }
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-function encodeJson(value: unknown): string {
-  return base64UrlEncode(new TextEncoder().encode(JSON.stringify(value)));
-}
-
-async function signHs256(message: string, secret: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
-  return base64UrlEncode(new Uint8Array(sig));
 }
 
 Deno.serve(async (req) => {
@@ -54,28 +32,24 @@ Deno.serve(async (req) => {
     const apiKey = requiredEnv("TWILIO_API_KEY");
     const apiSecret = requiredEnv("TWILIO_API_SECRET");
     const twimlAppSid = requiredEnv("TWILIO_TWIML_APP_SID");
-    const now = Math.floor(Date.now() / 1000);
-    const payload = {
-      jti: `${apiKey}-${now}`,
-      iss: apiKey,
-      sub: accountSid,
-      iat: now,
-      nbf: now,
-      exp: now + 3600,
-      grants: {
-        identity,
-        voice: {
-          incoming: { allow: true },
-          outgoing: { application_sid: twimlAppSid },
-        },
-      },
-    };
-    const header = { typ: "JWT", alg: "HS256" };
-    const signingInput = `${encodeJson(header)}.${encodeJson(payload)}`;
-    const signature = await signHs256(signingInput, apiSecret);
-    const token = `${signingInput}.${signature}`;
 
-    return new Response(JSON.stringify({ token }), {
+    const AccessToken = twilio.jwt.AccessToken;
+    const VoiceGrant = AccessToken.VoiceGrant;
+
+    const token = new AccessToken(accountSid, apiKey, apiSecret, {
+      identity,
+      ttl: 3600,
+    });
+
+    const voiceGrant = new VoiceGrant({
+      outgoingApplicationSid: twimlAppSid,
+      incomingAllow: true,
+    });
+    token.addGrant(voiceGrant);
+
+    const jwt = token.toJwt();
+
+    return new Response(JSON.stringify({ token: jwt }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
