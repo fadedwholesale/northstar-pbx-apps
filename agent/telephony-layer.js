@@ -56,6 +56,29 @@
     return global.Twilio && global.Twilio.Device ? global.Twilio : null;
   }
 
+  /** Waits if the SDK script is still loading over the network (sync order is unchanged). */
+  function waitForTwilioSDK(timeoutMs) {
+    var ms = typeof timeoutMs === 'number' ? timeoutMs : 8000;
+    return new Promise(function (resolve, reject) {
+      if (getTwilioGlobal()) {
+        resolve();
+        return;
+      }
+      var start = Date.now();
+      var id = setInterval(function () {
+        if (getTwilioGlobal()) {
+          clearInterval(id);
+          resolve();
+          return;
+        }
+        if (Date.now() - start > ms) {
+          clearInterval(id);
+          reject(new Error('Twilio Voice SDK not loaded. Check network / script tag.'));
+        }
+      }, 40);
+    });
+  }
+
   function twilioEnabled() {
     return !!(getTwilioGlobal() && state.provider.twilioToken);
   }
@@ -345,6 +368,7 @@
       if (!supa || typeof supa.isConfigured !== 'function' || !supa.isConfigured()) {
         return;
       }
+      await waitForTwilioSDK(8000);
       var TwilioGlobal = getTwilioGlobal();
       if (!TwilioGlobal) {
         throw new Error('Twilio Voice SDK not loaded. Check network / script tag.');

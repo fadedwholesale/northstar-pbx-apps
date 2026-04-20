@@ -256,7 +256,8 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://media.twiliocdn.com/sdk/js/voice/latest/twilio.min.js"></script>
+  <!-- media.twiliocdn.com/.../voice/latest/twilio.min.js returns 404; use npm UMD from jsDelivr -->
+  <script src="https://cdn.jsdelivr.net/npm/@twilio/voice-sdk@2.18.1/dist/twilio.min.js" crossorigin="anonymous"></script>
   <script src="supabase-config.js"></script>
   <script src="crm-store.js"></script>
   <script src="telephony-layer.js"></script>
