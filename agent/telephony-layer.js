@@ -39,8 +39,127 @@
     /** @type {{ id:string, digits:string, name?:string, started:number, mute:boolean, hold:boolean, recording:boolean, conference:boolean, parkedSlot?:string } | null} */
     activeCall: null,
     pendingConference: false,
+    provider: {
+      mode: 'mock',
+      twilioToken: null,
+      twilioTokenFetchedAt: null,
+      twilioLastError: null,
+      twilioDeviceRegistered: false,
+      twilioIdentity: null,
+    },
+    twilioDevice: null,
+    twilioCall: null,
     subscribers: [],
   };
+
+  function getTwilioGlobal() {
+    return global.Twilio && global.Twilio.Device ? global.Twilio : null;
+  }
+
+  function twilioEnabled() {
+    return !!(getTwilioGlobal() && state.provider.twilioToken);
+  }
+
+  function makeActiveCallModel(call, fallbackDigits, fallbackName) {
+    var params = (call && call.parameters) || {};
+    var digits = params.To || params.to || fallbackDigits || '';
+    var name = params.CallerName || params.From || params.from || fallbackName || '';
+    return {
+      id: (call && call.parameters && (call.parameters.CallSid || call.parameters.call_sid)) || ('call_' + Date.now()),
+      digits: digits,
+      name: name,
+      started: Date.now(),
+      mute: false,
+      hold: false,
+      recording: false,
+      conference: false,
+    };
+  }
+
+  function attachTwilioCallEvents(call) {
+    if (!call || typeof call.on !== 'function') return;
+    call.on('accept', function () {
+      state.twilioCall = call;
+      state.activeCall = makeActiveCallModel(call, state.activeCall && state.activeCall.digits, state.activeCall && state.activeCall.name);
+      emit('call', { phase: 'connected', call: state.activeCall });
+    });
+
+    call.on('disconnect', function () {
+      var endedCall = state.activeCall;
+      if (endedCall) {
+        var dur = Math.round((Date.now() - endedCall.started) / 1000);
+        formatHistoryRow({
+          id: 'h_' + Date.now(),
+          direction: 'outbound',
+          number: endedCall.digits,
+          name: endedCall.name,
+          startedAt: new Date(endedCall.started).toISOString(),
+          durationSec: dur,
+          result: 'completed',
+        });
+      }
+      state.twilioCall = null;
+      state.activeCall = null;
+      state.pendingConference = false;
+      emit('call', { phase: 'idle' });
+    });
+
+    call.on('cancel', function () {
+      state.twilioCall = null;
+      state.activeCall = null;
+      emit('call', { phase: 'idle' });
+    });
+
+    call.on('reject', function () {
+      state.twilioCall = null;
+      state.activeCall = null;
+      emit('call', { phase: 'idle' });
+    });
+
+    call.on('error', function (error) {
+      state.provider.twilioLastError = error && error.message ? error.message : String(error);
+      emit('error', { message: state.provider.twilioLastError });
+    });
+  }
+
+  function setupTwilioDeviceEventBridge(device) {
+    if (!device || typeof device.on !== 'function') return;
+
+    device.on('registered', function () {
+      state.provider.mode = 'twilio-registered';
+      state.provider.twilioDeviceRegistered = true;
+      emit('provider', { mode: state.provider.mode });
+    });
+
+    device.on('unregistered', function () {
+      state.provider.mode = 'twilio-ready';
+      state.provider.twilioDeviceRegistered = false;
+      emit('provider', { mode: state.provider.mode });
+    });
+
+    device.on('error', function (error) {
+      state.provider.twilioLastError = error && error.message ? error.message : String(error);
+      emit('provider', { mode: state.provider.mode, error: state.provider.twilioLastError });
+      emit('error', { message: state.provider.twilioLastError });
+    });
+
+    device.on('incoming', function (call) {
+      attachTwilioCallEvents(call);
+      var params = (call && call.parameters) || {};
+      emit('call', {
+        phase: 'ringing',
+        from: params.From || params.from || 'Unknown',
+        name: params.CallerName || params.From || 'Inbound caller',
+      });
+      try {
+        call.accept();
+      } catch (e) {}
+    });
+
+    device.on('tokenWillExpire', function () {
+      emit('provider', { mode: state.provider.mode, tokenWillExpire: true });
+    });
+  }
 
   function emit(type, payload) {
     state.subscribers.forEach(function (fn) {
@@ -161,6 +280,82 @@
       return typeof limit === 'number' ? list.slice(0, limit) : list.slice();
     },
 
+    getProviderStatus: function () {
+      return Object.assign({}, state.provider);
+    },
+
+    registerTwilioDevice: async function () {
+      var TwilioGlobal = getTwilioGlobal();
+      if (!TwilioGlobal) {
+        throw new Error('Twilio Voice SDK not loaded');
+      }
+      if (!state.provider.twilioToken) {
+        throw new Error('Twilio token missing');
+      }
+
+      if (state.twilioDevice && state.provider.twilioDeviceRegistered) {
+        return state.twilioDevice;
+      }
+
+      try {
+        if (state.twilioDevice && typeof state.twilioDevice.destroy === 'function') {
+          state.twilioDevice.destroy();
+        }
+      } catch (e) {}
+
+      var device = new TwilioGlobal.Device(state.provider.twilioToken, {
+        logLevel: 1,
+        edge: 'ashburn',
+      });
+      setupTwilioDeviceEventBridge(device);
+      state.twilioDevice = device;
+      await device.register();
+      return device;
+    },
+
+    /**
+     * Fetches a Twilio access token through Supabase Edge Function.
+     * Keeps mock mode active until a valid token is returned.
+     */
+    fetchTwilioAccessToken: async function (identity) {
+      var supa = global.NorthstarSupabase;
+      if (!supa || typeof supa.getClient !== 'function' || !supa.isConfigured()) {
+        throw new Error('Supabase is not configured for Twilio token fetch');
+      }
+      var client = supa.getClient();
+      if (!client) throw new Error('Supabase client unavailable');
+
+      var functionName = (supa.config && supa.config.twilioTokenFunction) || 'twilio-access-token';
+      var payload = {
+        identity: identity || state.userName || state.extension || 'agent',
+        extension: state.extension || '101',
+        lineId: state.lineId,
+      };
+
+      var response = await client.functions.invoke(functionName, { body: payload });
+      if (response.error) {
+        state.provider.twilioLastError = response.error.message || String(response.error);
+        emit('provider', { mode: state.provider.mode, error: state.provider.twilioLastError });
+        throw response.error;
+      }
+
+      var token = response.data && response.data.token ? response.data.token : null;
+      if (!token) {
+        state.provider.twilioLastError = 'Token response missing token property';
+        emit('provider', { mode: state.provider.mode, error: state.provider.twilioLastError });
+        throw new Error(state.provider.twilioLastError);
+      }
+
+      state.provider.mode = 'twilio-ready';
+      state.provider.twilioToken = token;
+      state.provider.twilioTokenFetchedAt = Date.now();
+      state.provider.twilioIdentity = payload.identity;
+      state.provider.twilioLastError = null;
+      emit('provider', { mode: state.provider.mode, fetchedAt: state.provider.twilioTokenFetchedAt });
+      await this.registerTwilioDevice();
+      return token;
+    },
+
     logOutboundAttempt: function (digits, meta) {
       formatHistoryRow({
         id: 'h_' + Date.now(),
@@ -210,10 +405,32 @@
         recording: false,
         conference: false,
       };
-      emit('call', { phase: 'connected', call: state.activeCall });
+
+      if (twilioEnabled() && state.twilioDevice && state.provider.twilioDeviceRegistered) {
+        state.twilioDevice.connect({
+          params: {
+            To: digits,
+            lineId: state.lineId,
+            callerId: (state.lines[state.callerIdIndex] && state.lines[state.callerIdIndex].number) || '',
+          },
+        }).then(function (call) {
+          state.twilioCall = call;
+          attachTwilioCallEvents(call);
+        }).catch(function (error) {
+          state.provider.twilioLastError = error && error.message ? error.message : String(error);
+          emit('error', { message: state.provider.twilioLastError });
+          emit('provider', { mode: state.provider.mode, error: state.provider.twilioLastError });
+        });
+      } else {
+        emit('call', { phase: 'connected', call: state.activeCall });
+      }
     },
 
     hangup: function () {
+      if (state.twilioCall && typeof state.twilioCall.disconnect === 'function') {
+        state.twilioCall.disconnect();
+        return;
+      }
       if (!state.activeCall) return;
       var dur = Math.round((Date.now() - state.activeCall.started) / 1000);
       formatHistoryRow({
@@ -233,6 +450,11 @@
     toggleMute: function () {
       if (!state.activeCall) return;
       state.activeCall.mute = !state.activeCall.mute;
+      if (state.twilioCall && typeof state.twilioCall.mute === 'function') {
+        try {
+          state.twilioCall.mute(state.activeCall.mute);
+        } catch (e) {}
+      }
       emit('call', { phase: 'mute', mute: state.activeCall.mute });
     },
 
@@ -294,6 +516,11 @@
 
     sendDtmf: function (tone) {
       if (!state.activeCall) return;
+      if (state.twilioCall && typeof state.twilioCall.sendDigits === 'function') {
+        try {
+          state.twilioCall.sendDigits(String(tone || ''));
+        } catch (e) {}
+      }
       emit('dtmf', { tone: tone });
     },
 

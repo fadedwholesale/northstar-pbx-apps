@@ -57,5 +57,17 @@
     alert('Production: GET /admin/api/cdr?from=&to=&format=csv returns signed CSV from your CDR warehouse.');
   };
 
-  refreshCrmView();
+  if (typeof NorthstarCRM.initialize === 'function') {
+    NorthstarCRM.initialize()
+      .then(function (status) {
+        if (!status.enabled) NorthstarCRM.seedDemo();
+        refreshCrmView();
+      })
+      .catch(function () {
+        NorthstarCRM.seedDemo();
+        refreshCrmView();
+      });
+  } else {
+    refreshCrmView();
+  }
 })();

@@ -352,9 +352,16 @@
 
   function renderCrmSync() {
     var db = NorthstarCRM.load();
+    var remote = typeof NorthstarCRM.getRemoteStatus === 'function'
+      ? NorthstarCRM.getRemoteStatus()
+      : { enabled: false };
+    var remoteSummary = remote.enabled
+      ? ('Supabase connected' + (remote.lastSyncAt ? ' · Last sync ' + fmtTime(remote.lastSyncAt) : ''))
+      : 'Local demo mode';
     $('panel-crm').innerHTML =
       '<div class="panel"><div class="sec-hd">Northstar CRM</div><p class="hint">Production: OAuth to your CRM API; webhooks on disposition.</p>' +
-      '<p style="font-size:11px;color:#6b7280;margin-top:8px">Last sync: ' + esc((db.meta && db.meta.updatedAt) || '—') + '</p>' +
+      '<p style="font-size:11px;color:#6b7280;margin-top:8px">Status: ' + esc(remoteSummary) + '</p>' +
+      '<p style="font-size:11px;color:#6b7280;margin-top:4px">Local cache updated: ' + esc((db.meta && db.meta.updatedAt) || '—') + '</p>' +
       '<button type="button" class="qbtn" style="margin-top:10px;width:auto" onclick="NSDialer.syncCrmNow()">Refresh</button>' +
       '<div id="crmAct2" style="margin-top:12px;max-height:280px;overflow:auto"></div></div>';
     var acts = NorthstarCRM.listActivities(20);
@@ -501,8 +508,19 @@
   }
 
   function syncCrmNow() {
+    if (typeof NorthstarCRM.syncFromRemote === 'function' && typeof NorthstarCRM.isRemoteEnabled === 'function' && NorthstarCRM.isRemoteEnabled()) {
+      NorthstarCRM.syncFromRemote()
+        .then(function () {
+          renderCrmSync();
+          alert('CRM synced from Supabase.');
+        })
+        .catch(function (error) {
+          alert('Supabase sync failed: ' + (error && error.message ? error.message : String(error)));
+        });
+      return;
+    }
     NorthstarCRM.seedDemo();
-    alert('CRM sync: replace with REST call to your API.');
+    alert('CRM is running in local demo mode.');
   }
 
   function openTransfer(kind) {
@@ -531,8 +549,25 @@
   }
 
   function init() {
-    NorthstarCRM.seedDemo();
     NorthstarTelephony.init({ extension: '102', userName: AGENT.name });
+    if (typeof NorthstarCRM.initialize === 'function') {
+      NorthstarCRM.initialize()
+        .then(function (status) {
+          if (!status.enabled) NorthstarCRM.seedDemo();
+        })
+        .catch(function () {
+          NorthstarCRM.seedDemo();
+        });
+    } else {
+      NorthstarCRM.seedDemo();
+    }
+
+    if (typeof NorthstarTelephony.fetchTwilioAccessToken === 'function') {
+      NorthstarTelephony.fetchTwilioAccessToken(AGENT.id).catch(function (error) {
+        console.warn('[Northstar dialer] Twilio token not ready yet:', error && error.message ? error.message : error);
+      });
+    }
+
     var extEl = $('extDisplay');
     if (extEl) extEl.textContent = NorthstarTelephony.getState().extension || '102';
 
