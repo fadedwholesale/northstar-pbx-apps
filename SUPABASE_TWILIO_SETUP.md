@@ -143,7 +143,32 @@ Example outbound TwiML behavior:
 - Dial PSTN number passed as `To`
 - Apply caller ID from selected line in the dialer
 
-## 6) What is already wired in this repo
+## 6) Phone number webhooks (replace Twilio demo URL)
+
+Do **not** leave `https://demo.twilio.com/welcome/voice/` on your purchased number. Use the same production voice function:
+
+**Voice webhook (when a call comes in)**  
+- **URL:** `https://gbffglopzqxmsvzazkfj.functions.supabase.co/twilio-voice`  
+- **HTTP:** `POST`
+
+That endpoint returns TwiML that routes **inbound** PSTN callers to your browser agent via `<Dial><Client>…</Client></Dial>`.
+
+Set the client identity Twilio should ring (must match the identity in your access token, e.g. `agent_jd`):
+
+```bash
+supabase secrets set TWILIO_VOICE_CLIENT_IDENTITY=agent_jd
+```
+
+**Primary handler fails (recommended)**  
+Use the same URL so callers hear a short message instead of silence:
+
+- **URL:** `https://gbffglopzqxmsvzazkfj.functions.supabase.co/twilio-voice`  
+- **HTTP:** `POST`
+
+**Call status changes (optional)**  
+Point to your own analytics webhook later, or leave empty for now.
+
+## 7) What is already wired in this repo
 
 - `agent/crm-store.js` and `admin/crm-store.js`:
   - local-first caching
