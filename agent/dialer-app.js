@@ -160,8 +160,30 @@
       meta.name = lead.biz;
       meta.contactName = lead.name;
     }
+
+    function bumpDials() {
+      if ($('sDials')) $('sDials').textContent = parseInt($('sDials').textContent, 10) + 1;
+    }
+
+    if (typeof NorthstarTelephony.ensureVoiceReady === 'function') {
+      NorthstarTelephony.ensureVoiceReady(AGENT.id)
+        .then(function () {
+          NorthstarTelephony.dial(raw, meta);
+          bumpDials();
+        })
+        .catch(function (err) {
+          console.error('[Northstar dialer] Voice not ready:', err);
+          alert(
+            'Voice could not start: ' +
+              (err && err.message ? err.message : String(err)) +
+              '\n\nAllow microphone access if prompted, then try again.'
+          );
+        });
+      return;
+    }
+
     NorthstarTelephony.dial(raw, meta);
-    if ($('sDials')) $('sDials').textContent = parseInt($('sDials').textContent, 10) + 1;
+    bumpDials();
   }
 
   function hangup() {

@@ -173,6 +173,26 @@
     return String(input || '').replace(/[^\d+*#]/g, '');
   }
 
+  /** US-focused E.164 for Twilio outbound (trial + PSTN). Short extensions stay bare. */
+  function toE164US(digits) {
+    var d = normalizeDigits(digits);
+    if (!d) return '';
+    if (/^\d{2,6}$/.test(d)) return d;
+    if (d.length === 10) return '+1' + d;
+    if (d.length === 11 && d.charAt(0) === '1') return '+' + d;
+    if (d.charAt(0) === '+') return d;
+    return '+' + d;
+  }
+
+  function lineNumberToE164(lineObj) {
+    if (!lineObj || !lineObj.number) return '';
+    var raw = String(lineObj.number);
+    var only = raw.replace(/\D/g, '');
+    if (only.length === 11 && only.charAt(0) === '1') return '+' + only;
+    if (only.length === 10) return '+1' + only;
+    return toE164US(only);
+  }
+
   function formatHistoryRow(entry) {
     var list = loadJson(STORAGE_HISTORY, []);
     list.unshift(entry);
@@ -310,7 +330,29 @@
       setupTwilioDeviceEventBridge(device);
       state.twilioDevice = device;
       await device.register();
+      state.provider.twilioDeviceRegistered = true;
+      state.provider.mode = 'twilio-registered';
+      emit('provider', { mode: state.provider.mode });
       return device;
+    },
+
+    /**
+     * When Supabase + Twilio are configured, fetch token and register Device before dialing.
+     * Resolves when ready; if Supabase is not configured, resolves (mock/local mode).
+     */
+    ensureVoiceReady: async function (identity) {
+      var supa = global.NorthstarSupabase;
+      if (!supa || typeof supa.isConfigured !== 'function' || !supa.isConfigured()) {
+        return;
+      }
+      var TwilioGlobal = getTwilioGlobal();
+      if (!TwilioGlobal) {
+        throw new Error('Twilio Voice SDK not loaded. Check network / script tag.');
+      }
+      if (state.twilioDevice && state.provider.twilioDeviceRegistered && state.provider.twilioToken) {
+        return;
+      }
+      await Telephony.fetchTwilioAccessToken(identity || state.extension || 'agent');
     },
 
     /**
@@ -387,17 +429,27 @@
       emit('voicemail', {});
     },
 
-    /** Simulate placing outbound call — wire to provider SDK */
+    /**
+     * Place outbound call: Twilio Client when configured + ready; otherwise local mock for UX demos.
+     */
     dial: function (raw, contactMeta) {
       var digits = normalizeDigits(raw);
       if (!digits) {
         emit('error', { message: 'Enter a number' });
         return;
       }
-      Telephony.logOutboundAttempt(digits, contactMeta);
+      var supa = global.NorthstarSupabase;
+      var wantsTwilio = !!(supa && typeof supa.isConfigured === 'function' && supa.isConfigured());
+
+      var e164To = toE164US(digits);
+      var line = state.lines[state.callerIdIndex] || state.lines[0];
+      var e164Caller = lineNumberToE164(line);
+
+      Telephony.logOutboundAttempt(e164To || digits, contactMeta);
+
       state.activeCall = {
         id: 'call_' + Date.now(),
-        digits: digits,
+        digits: e164To || digits,
         name: contactMeta && contactMeta.name,
         started: Date.now(),
         mute: false,
@@ -406,12 +458,12 @@
         conference: false,
       };
 
-      if (twilioEnabled() && state.twilioDevice && state.provider.twilioDeviceRegistered) {
+      if (wantsTwilio && twilioEnabled() && state.twilioDevice && state.provider.twilioDeviceRegistered) {
         state.twilioDevice.connect({
           params: {
-            To: digits,
+            To: e164To || digits,
             lineId: state.lineId,
-            callerId: (state.lines[state.callerIdIndex] && state.lines[state.callerIdIndex].number) || '',
+            callerId: e164Caller,
           },
         }).then(function (call) {
           state.twilioCall = call;
@@ -420,9 +472,16 @@
           state.provider.twilioLastError = error && error.message ? error.message : String(error);
           emit('error', { message: state.provider.twilioLastError });
           emit('provider', { mode: state.provider.mode, error: state.provider.twilioLastError });
+          state.activeCall = null;
+          emit('call', { phase: 'idle' });
         });
-      } else {
+      } else if (!wantsTwilio) {
         emit('call', { phase: 'connected', call: state.activeCall });
+      } else {
+        state.provider.twilioLastError = 'Voice not registered yet — wait a moment and try again';
+        emit('error', { message: state.provider.twilioLastError });
+        state.activeCall = null;
+        emit('call', { phase: 'idle' });
       }
     },
 
