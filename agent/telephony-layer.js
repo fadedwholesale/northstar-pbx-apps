@@ -63,7 +63,7 @@
     presence: 'available', // available | busy | dnd | invisible | offline
     lineId: 'line1',
     lines: [
-      { id: 'line1', label: 'Main', number: '+1 (210) 555-0140', outbound: true },
+      { id: 'line1', label: 'Main', number: '+1 (210) 791-6275', outbound: true },
       { id: 'line2', label: 'Detailing campaigns', number: '+1 (210) 555-0199', outbound: true },
     ],
     callerIdIndex: 0,
