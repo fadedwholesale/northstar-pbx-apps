@@ -12,25 +12,30 @@ function requiredEnv(name: string): string {
   return String(value).trim();
 }
 
-/** Confirms SK + secret work with Twilio REST (same check as token signature validation). */
+/**
+ * Confirms SK + secret authenticate to Twilio REST.
+ * Note: GET /Accounts/{Sid}.json returns 401 when using API Key Basic auth even for valid keys;
+ * use a scoped resource Twilio documents for API-key auth instead.
+ */
 async function assertApiKeyAuthenticates(
   accountSid: string,
   apiKeySid: string,
   apiSecret: string,
 ): Promise<void> {
   const auth = btoa(`${apiKeySid}:${apiSecret}`);
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}.json`;
+  const url =
+    `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers.json?PageSize=1`;
   const res = await fetch(url, {
     headers: { Authorization: `Basic ${auth}` },
   });
   if (res.status === 401 || res.status === 403) {
     throw new Error(
-      "Twilio rejected the API Key (HTTP 401/403). TWILIO_API_SECRET must be the secret for TWILIO_API_KEY (SK…) from Console → Account → API keys & tokens — not your Auth Token. Create a new Standard API Key if unsure.",
+      "Twilio rejected the API Key (HTTP 401/403). TWILIO_API_SECRET must match TWILIO_API_KEY (SK…) from Console → Account → API keys & tokens — not your Auth Token.",
     );
   }
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`Twilio Account lookup failed (${res.status}): ${body.slice(0, 240)}`);
+    throw new Error(`Twilio credentials check failed (${res.status}): ${body.slice(0, 240)}`);
   }
 }
 
