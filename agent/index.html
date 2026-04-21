@@ -7,6 +7,7 @@
   <meta name="northstar-supabase-anon-key" content="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdiZmZnbG9wenF4bXN2emF6a2ZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3MDAzNjIsImV4cCI6MjA5MjI3NjM2Mn0.REMYzX_c-1cC3FKHmXVvn9JEouLVszt7A5GSkfNlgrk" />
   <meta name="northstar-twilio-token-function" content="twilio-access-token" />
   <title>Northstar — Phone</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f766e'/%3E%3Cpath fill='white' d='M11 10c0-1 1-2 2-2h6l3 3v9c0 1-1 2-2 2h-6c-1 0-2-1-2-2V10zm3 2h4v2h-4v-2zm0 4h4v2h-4v-2z'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="shared.css" />
 </head>
 <body style="padding:16px;background:#f3f4f6">
@@ -141,21 +142,21 @@
                 </div>
               </div>
               <div class="sec-hd" style="margin-top:4px">Primary controls</div>
-              <div class="ctrls">
-                <button type="button" class="cb" id="muteBtn" onclick="NSDialer.toggleMute()"><span class="ci">🔇</span><span>Mute</span></button>
-                <button type="button" class="cb" id="holdBtn" onclick="NSDialer.toggleHold()"><span class="ci">⏸</span><span>Hold</span></button>
-                <button type="button" class="cb blu" onclick="NSDialer.openTransfer('warm')"><span class="ci">↗</span><span>Warm xfer</span></button>
-                <button type="button" class="cb blu" onclick="NSDialer.openTransfer('blind')"><span class="ci">⇢</span><span>Blind xfer</span></button>
-                <button type="button" class="cb" id="recBtn" onclick="NSDialer.toggleRec()"><span class="ci" id="recIco">⏺</span><span>Record</span></button>
-                <button type="button" class="cb red" onclick="NSDialer.hangup()"><span class="ci">✕</span><span>End</span></button>
+              <div class="ctrls" id="primaryCallCtrls">
+                <button type="button" class="cb" id="muteBtn" onclick="NSDialer.toggleMute()" disabled><span class="ci">🔇</span><span>Mute</span></button>
+                <button type="button" class="cb" id="holdBtn" onclick="NSDialer.toggleHold()" disabled><span class="ci">⏸</span><span>Hold</span></button>
+                <button type="button" class="cb blu" id="warmXferBtn" onclick="NSDialer.openTransfer('warm')" disabled><span class="ci">↗</span><span>Warm xfer</span></button>
+                <button type="button" class="cb blu" id="blindXferBtn" onclick="NSDialer.openTransfer('blind')" disabled><span class="ci">⇢</span><span>Blind xfer</span></button>
+                <button type="button" class="cb" id="recBtn" onclick="NSDialer.toggleRec()" disabled><span class="ci" id="recIco">⏺</span><span>Record</span></button>
+                <button type="button" class="cb red" id="endCallBtn" onclick="NSDialer.hangup()" disabled><span class="ci">✕</span><span>End</span></button>
               </div>
               <div class="sec-hd" style="margin-top:10px">Advanced</div>
-              <div class="ctrls-2">
-                <button type="button" class="cb" onclick="NSDialer.toggleDtmfPanel()"><span class="ci">⌨</span><span>Keypad</span></button>
-                <button type="button" class="cb" onclick="NSDialer.conferenceAdd()"><span class="ci">👥</span><span>Add call</span></button>
-                <button type="button" class="cb" onclick="NSDialer.mergeCalls()"><span class="ci">⎇</span><span>Merge</span></button>
-                <button type="button" class="cb" onclick="NSDialer.flip()"><span class="ci">📱</span><span>Flip</span></button>
-                <button type="button" class="cb" onclick="NSDialer.parkCall()"><span class="ci">P</span><span>Park</span></button>
+              <div class="ctrls-2" id="advancedCallCtrls">
+                <button type="button" class="cb" onclick="NSDialer.toggleDtmfPanel()" disabled><span class="ci">⌨</span><span>Keypad</span></button>
+                <button type="button" class="cb" onclick="NSDialer.conferenceAdd()" disabled><span class="ci">👥</span><span>Add call</span></button>
+                <button type="button" class="cb" onclick="NSDialer.mergeCalls()" disabled><span class="ci">⎇</span><span>Merge</span></button>
+                <button type="button" class="cb" onclick="NSDialer.flip()" disabled><span class="ci">📱</span><span>Flip</span></button>
+                <button type="button" class="cb" onclick="NSDialer.parkCall()" disabled><span class="ci">P</span><span>Park</span></button>
               </div>
               <div id="dtmfPanel" class="hidden">
                 <div class="sec-hd" style="margin-top:10px">Send DTMF</div>
@@ -225,7 +226,8 @@
 
             <div>
               <div class="sec-hd">HUD — team presence</div>
-              <div id="teamList"></div>
+              <p class="hint" style="margin:-4px 0 8px;font-size:10px">Seats are data-driven (<code>SEAT_ROSTER</code> in <code>dialer-app.js</code>); add rows for new agents.</p>
+              <div id="teamList" class="team-presence-scroll" role="list" aria-label="Team presence"></div>
             </div>
 
             <div>

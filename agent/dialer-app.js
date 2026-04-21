@@ -1,6 +1,22 @@
 /* global NorthstarCRM, NorthstarTelephony */
 (function (global) {
   var AGENT = { id: 'agent_jd', name: 'James D.', initials: 'JD' };
+
+  /**
+   * Team HUD + directory extensions — add rows here as you add seats/licenses.
+   * status: g=available/on-call green, a=away/break amber, y=busy other line orange, gr=offline gray
+   */
+  var SEAT_ROSTER = [
+    { id: 'agent_jd', av: 'JD', name: 'James D.', ext: '102', status: 'g', statusTxt: 'Available', dials: 39, appts: 2, pct: 72 },
+    { id: 'seat_sr', av: 'SR', name: 'Sara R.', ext: '103', status: 'g', statusTxt: 'Available', dials: 52, appts: 5, pct: 91, bg: '#ecfdf5', col: '#065f46' },
+    { id: 'seat_mc', av: 'MC', name: 'Marcus C.', ext: '104', status: 'a', statusTxt: 'On break', dials: 29, appts: 1, pct: 38, bg: '#fffbeb', col: '#b45309' },
+    { id: 'seat_tl', av: 'TL', name: 'Tanya L.', ext: '105', status: 'gr', statusTxt: 'Offline', dials: 0, appts: 0, pct: 0, bg: '#f3f4f6', col: '#9ca3af' },
+    { id: 'seat_jk', av: 'JK', name: 'Jordan K.', ext: '106', status: 'g', statusTxt: 'Available', dials: 41, appts: 3, pct: 68 },
+    { id: 'seat_pn', av: 'PN', name: 'Priya N.', ext: '107', status: 'y', statusTxt: 'Busy', dials: 63, appts: 7, pct: 95 },
+    { id: 'seat_cw', av: 'CW', name: 'Chris W.', ext: '108', status: 'gr', statusTxt: 'Offline', dials: 12, appts: 0, pct: 22, bg: '#f3f4f6', col: '#9ca3af' },
+    { id: 'seat_mt', av: 'MT', name: 'Morgan T.', ext: '109', status: 'g', statusTxt: 'Available', dials: 35, appts: 4, pct: 81 },
+  ];
+
   var leads = [
     { biz: "Mike's Pro Detailing", name: 'Mike Pena', phone: '(210) 555-0182', vert: 'Detailing', tag: 'td', active: true },
     { biz: 'SA Luxury Detail', name: 'Alex Torres', phone: '(210) 555-0241', vert: 'Detailing', tag: 'td', active: false },
@@ -10,13 +26,6 @@
     { biz: 'Prestige Shine Co.', name: 'Lena V.', phone: '(210) 555-0614', vert: 'Detailing', tag: 'td', active: false },
     { biz: 'Taco Fiesta SA', name: 'Omar G.', phone: '(210) 555-0733', vert: 'Restaurant', tag: 'tr', active: false },
   ];
-  var team = [
-    { av: 'JD', name: 'James D.', status: 'g', statusTxt: 'On call', dials: 39, appts: 2, pct: 72 },
-    { av: 'SR', name: 'Sara R.', status: 'g', statusTxt: 'Available', dials: 52, appts: 5, pct: 91, bg: '#ecfdf5', col: '#065f46' },
-    { av: 'MC', name: 'Marcus C.', status: 'a', statusTxt: 'On break', dials: 29, appts: 1, pct: 38, bg: '#fffbeb', col: '#b45309' },
-    { av: 'TL', name: 'Tanya L.', status: 'gr', statusTxt: 'Offline', dials: 0, appts: 0, pct: 0, bg: '#f3f4f6', col: '#9ca3af' },
-  ];
-
   var activeLeadIdx = 0;
   var timerInt = null;
   var dtmfOpen = false;
@@ -60,14 +69,63 @@
     });
   }
 
+  function statusDotColor(status) {
+    if (status === 'g') return '#22c55e';
+    if (status === 'a') return '#f59e0b';
+    if (status === 'y') return '#f97316';
+    return '#9ca3af';
+  }
+
   function renderTeam() {
     var tl = $('teamList');
     if (!tl) return;
-    tl.innerHTML = '';
-    team.forEach(function (a) {
+    var st = NorthstarTelephony.getState();
+    var onCall = !!(st && st.activeCall);
+    tl.innerHTML = SEAT_ROSTER.map(function (a) {
+      var statusTxt = a.statusTxt;
+      var dotStatus = a.status;
+      if (a.id === AGENT.id) {
+        statusTxt = onCall ? 'On call' : 'Available';
+        dotStatus = 'g';
+      }
       var bg = a.bg || '#eff6ff';
       var col = a.col || '#2563eb';
-      tl.innerHTML += '<div class="ar"><div class="av" style="width:28px;height:28px;font-size:10px;background:' + bg + ';color:' + col + '">' + esc(a.av) + '</div><div class="ai"><div class="an">' + esc(a.name) + ' <span style="font-size:10px;color:' + (a.status === 'g' ? '#22c55e' : a.status === 'a' ? '#f59e0b' : '#9ca3af') + '">● ' + esc(a.statusTxt) + '</span></div><div class="as">' + a.dials + ' dials · ' + a.appts + ' appts</div><div class="pb"><div class="pf" style="width:' + a.pct + '%"></div></div></div></div>';
+      var dotCol = statusDotColor(dotStatus);
+      return (
+        '<div class="ar" role="listitem">' +
+        '<div class="av" style="width:28px;height:28px;font-size:10px;background:' +
+        bg +
+        ';color:' +
+        col +
+        '">' +
+        esc(a.av) +
+        '</div>' +
+        '<div class="ai"><div class="an">' +
+        esc(a.name) +
+        ' <span style="font-size:10px;color:' +
+        dotCol +
+        '">● ' +
+        esc(statusTxt) +
+        '</span></div>' +
+        '<div class="as">' +
+        a.dials +
+        ' dials · ' +
+        a.appts +
+        ' appts</div>' +
+        '<div class="pb"><div class="pf" style="width:' +
+        a.pct +
+        '%"></div></div></div></div>'
+      );
+    }).join('');
+  }
+
+  function setCallControlsEnabled(enabled) {
+    ['primaryCallCtrls', 'advancedCallCtrls'].forEach(function (id) {
+      var wrap = $(id);
+      if (!wrap) return;
+      wrap.querySelectorAll('button').forEach(function (btn) {
+        btn.disabled = !enabled;
+      });
     });
   }
 
@@ -122,6 +180,9 @@
     if (conf) conf.classList.toggle('hidden', !NorthstarTelephony.getState().pendingConference);
     var bp = $('btnPlaceCall');
     if (bp) bp.disabled = false;
+
+    setCallControlsEnabled(has);
+    renderTeam();
   }
 
   function formatPhone(d) {
@@ -439,12 +500,24 @@
 
   function renderContacts() {
     var contacts = NorthstarCRM.listContacts();
+    var dirRows = SEAT_ROSTER.filter(function (m) {
+      return m.ext;
+    }).map(function (m) {
+      return (
+        '<tr><td>' +
+        esc(m.name) +
+        '</td><td class="mono">' +
+        esc(m.ext) +
+        '</td><td><button type="button" class="db blu" style="font-size:10px;padding:4px 8px" onclick="NSDialer.directoryDial(\'' +
+        esc(m.ext) +
+        '\')">Dial ext</button></td></tr>'
+      );
+    }).join('');
     $('panel-contacts').innerHTML =
       '<div class="panel"><div class="sec-hd">CRM contacts</div><div id="crmContactsGrid"></div></div>' +
-      '<div class="panel"><div class="sec-hd">Company directory</div><p class="hint">Sync from HR / Entra ID / SCIM. Quick dial uses telephony layer.</p>' +
+      '<div class="panel"><div class="sec-hd">Company directory</div><p class="hint">Extensions mirror <code>SEAT_ROSTER</code> in <code>dialer-app.js</code>. Sync from HR / Entra ID in production.</p>' +
       '<table class="data-table"><thead><tr><th>Name</th><th>Extension</th><th>Actions</th></tr></thead><tbody>' +
-      '<tr><td>Sara R.</td><td class="mono">103</td><td><button type="button" class="db blu" style="font-size:10px;padding:4px 8px" onclick="NSDialer.directoryDial(\'103\')">Dial ext</button></td></tr>' +
-      '<tr><td>Marcus C.</td><td class="mono">104</td><td><button type="button" class="db blu" style="font-size:10px;padding:4px 8px" onclick="NSDialer.directoryDial(\'104\')">Dial ext</button></td></tr>' +
+      dirRows +
       '</tbody></table></div>';
 
     $('crmContactsGrid').innerHTML = contacts.map(function (c) {
@@ -552,13 +625,22 @@
   }
 
   function openTransfer(kind) {
-    var dest = prompt(kind === 'blind' ? 'Blind transfer to (number or ext)' : 'Warm transfer — consult destination');
-    if (!dest) return;
-    if (kind === 'blind') NorthstarTelephony.transferBlind(dest);
-    else {
+    var dest = prompt(
+      kind === 'blind'
+        ? 'Blind transfer to (number or ext)'
+        : 'Warm transfer — consult destination (number or ext)',
+    );
+    if (!dest || !String(dest).trim()) return;
+    dest = String(dest).trim();
+    if (kind === 'blind') {
+      NorthstarTelephony.transferBlind(dest);
+    } else {
       NorthstarTelephony.transferWarmStart();
-      alert('Consult leg would dial ' + dest + '. Complete warm transfer when ready.');
-      NorthstarTelephony.transferWarmComplete();
+      alert(
+        'Warm transfer (preview): consult would dial ' +
+          dest +
+          '. Production uses a second Twilio leg or conference; we no longer hang up your customer automatically from this prompt.',
+      );
     }
     syncCallUi();
   }
