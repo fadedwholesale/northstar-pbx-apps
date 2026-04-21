@@ -57,17 +57,20 @@ function twimlInboundRingClient(clientIdentity: string, _from: string): string {
 }
 
 /**
- * Outbound from TwiML App (Voice SDK connect): dial PSTN or SIP target in `To`.
+ * Outbound from TwiML App (Voice SDK connect): dial PSTN or extension in `To`.
+ * Use explicit <Number> noun (plain text in <Dial> is unreliable).
  */
-function twimlOutboundDial(to: string, callerId: string): string {
+function twimlOutboundDial(toNormalized: string, callerIdNormalized: string): string {
   let dialAttrs = "";
-  const cid = callerId ? toE164Pstn(callerId) : "";
+  const cid = callerIdNormalized ? toE164Pstn(callerIdNormalized) : "";
   if (cid) dialAttrs += ` callerId="${xmlEscape(cid)}"`;
-  const dest = formatOutboundDestination(to);
+  const dest = formatOutboundDestination(toNormalized);
   if (/^\d{2,6}$/.test(dest)) dialAttrs += " answerOnBridge=\"true\"";
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Dial${dialAttrs}>${xmlEscape(dest)}</Dial>
+  <Dial${dialAttrs}>
+    <Number>${xmlEscape(dest)}</Number>
+  </Dial>
 </Response>`;
 }
 
@@ -87,10 +90,6 @@ Deno.serve(async (req) => {
   // Twilio posts x-www-form-urlencoded by default.
   const body = await req.text();
   const params = new URLSearchParams(body);
-  const direction = (params.get("Direction") || "").toLowerCase();
-  // PSTN/mobile calling your Twilio number: Direction is inbound.
-  // Browser outbound via TwiML App: Direction is typically not inbound (often omitted or outbound-api).
-  const isInbound = direction === "inbound" || direction === "inbound-api";
 
   // Primary-handler failure fallback: Twilio may POST with minimal fields; return polite TwiML.
   if (params.get("ErrorCode") || params.get("errorCode")) {
@@ -102,12 +101,52 @@ Deno.serve(async (req) => {
     });
   }
 
-  if (isInbound) {
+  const from = params.get("From") || "";
+  const toRaw = params.get("To") || params.get("to") || "";
+  const direction = (params.get("Direction") || "").toLowerCase();
+
+  const fromIsClient = from.startsWith("client:");
+  const toTrimmed = String(toRaw || "").trim();
+  const toLooksLikeClientUri = toTrimmed.toLowerCase().startsWith("client:");
+  const toNormalized = normalizeDialTarget(toRaw);
+
+  /**
+   * Voice JS SDK outbound: From is client:identity; To is the PSTN/extension target.
+   * Must run BEFORE any Direction-based inbound branch — Twilio sometimes sends Direction
+   * values (e.g. inbound-api) that must NOT be treated as PSTN→browser, or Twilio will
+   * <Dial><Client>…</Client></Dial> back to the same browser while it is already in an
+   * outbound call ("Device busy; ignoring incoming invite") and audio never bridges.
+   */
+  const isVoiceSdkOutbound =
+    fromIsClient &&
+    toNormalized.length > 0 &&
+    !toLooksLikeClientUri;
+
+  /**
+   * Someone dialing your Twilio phone number → ring the browser Client.
+   * From is a PSTN/SIP caller, not client:…
+   */
+  const isPstnInboundToTwilio =
+    !fromIsClient &&
+    direction === "inbound";
+
+  if (isVoiceSdkOutbound) {
+    const callerIdRaw = params.get("callerId") || params.get("CallerId") || "";
+    const callerId = normalizeDialTarget(callerIdRaw);
+    const xml = twimlOutboundDial(toNormalized, callerId);
+    return new Response(xml, {
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "text/xml; charset=utf-8",
+      },
+    });
+  }
+
+  if (isPstnInboundToTwilio) {
     const clientIdentity = requiredEnv(
       "TWILIO_VOICE_CLIENT_IDENTITY",
       "agent_jd",
     );
-    const from = params.get("From") || "";
     const xml = twimlInboundRingClient(clientIdentity, from);
     return new Response(xml, {
       headers: {
@@ -117,14 +156,13 @@ Deno.serve(async (req) => {
     });
   }
 
-  const toRaw = params.get("To") || params.get("to") || "";
+  // REST-initiated outbound or edge cases: prefer dialing To if present.
   const callerIdRaw = params.get("callerId") || params.get("CallerId") || "";
-
-  const to = normalizeDialTarget(toRaw);
   const callerId = normalizeDialTarget(callerIdRaw);
 
-  if (!to) {
-    return new Response(twimlFallbackMessage(), {
+  if (toNormalized.length > 0) {
+    const xml = twimlOutboundDial(toNormalized, callerId);
+    return new Response(xml, {
       headers: {
         ...corsHeaders,
         "Content-Type": "text/xml; charset=utf-8",
@@ -132,9 +170,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  const xml = twimlOutboundDial(to, callerId);
-
-  return new Response(xml, {
+  return new Response(twimlFallbackMessage(), {
     headers: {
       ...corsHeaders,
       "Content-Type": "text/xml; charset=utf-8",
