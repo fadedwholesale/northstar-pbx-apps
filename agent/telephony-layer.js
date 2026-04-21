@@ -31,7 +31,15 @@
   function formatErr(err) {
     if (err == null) return 'Unknown error';
     if (typeof err === 'string') return err;
-    var msg = err.message || err.msg || err.error_description;
+    var msg =
+      err.message ||
+      err.msg ||
+      err.error_description ||
+      (typeof err.reason === 'string' ? err.reason : '');
+    /** Twilio Voice SDK often sets .code (e.g. 20101) with message on prototype. */
+    if (!msg && typeof err.code !== 'undefined' && err.code !== null) {
+      msg = 'Twilio error ' + String(err.code);
+    }
     var code = err.code;
     var name = err.name;
     var parts = [];
@@ -376,10 +384,57 @@
       });
       setupTwilioDeviceEventBridge(device);
       state.twilioDevice = device;
+      /**
+       * Invalid tokens often fail with AccessTokenInvalid (20101) on the Device `error` event after
+       * WebSocket validation — not necessarily as a rejection from `register()`. Wait for
+       * `registered` or first `error` instead of awaiting `register()` alone.
+       */
       try {
-        await device.register();
+        await new Promise(function (resolve, reject) {
+          var settled = false;
+          var timer = setTimeout(function () {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            reject(new Error('Twilio registration timed out — check token and microphone permission'));
+          }, 25000);
+
+          function cleanup() {
+            clearTimeout(timer);
+            device.removeListener('registered', onRegistered);
+            device.removeListener('error', onDeviceError);
+          }
+
+          function onRegistered() {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            resolve();
+          }
+
+          function onDeviceError(err) {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            reject(err != null ? err : new Error('Twilio Device error'));
+          }
+
+          device.on('registered', onRegistered);
+          device.on('error', onDeviceError);
+
+          device.register().catch(function (regPromiseErr) {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            reject(regPromiseErr != null ? regPromiseErr : new Error('device.register() failed'));
+          });
+        });
       } catch (regErr) {
         state.provider.twilioDeviceRegistered = false;
+        try {
+          if (device && typeof device.destroy === 'function') device.destroy();
+        } catch (destroyErr) {}
+        state.twilioDevice = null;
         throw new Error(formatErr(regErr));
       }
       state.provider.twilioDeviceRegistered = true;
