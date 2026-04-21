@@ -8,8 +8,54 @@ const corsHeaders = {
 
 function requiredEnv(name: string): string {
   const value = Deno.env.get(name);
-  if (!value) throw new Error(`Missing required env var: ${name}`);
-  return value;
+  if (!value || !String(value).trim()) throw new Error(`Missing required env var: ${name}`);
+  return String(value).trim();
+}
+
+/** Confirms SK + secret work with Twilio REST (same check as token signature validation). */
+async function assertApiKeyAuthenticates(
+  accountSid: string,
+  apiKeySid: string,
+  apiSecret: string,
+): Promise<void> {
+  const auth = btoa(`${apiKeySid}:${apiSecret}`);
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}.json`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Basic ${auth}` },
+  });
+  if (res.status === 401 || res.status === 403) {
+    throw new Error(
+      "Twilio rejected the API Key (HTTP 401/403). TWILIO_API_SECRET must be the secret for TWILIO_API_KEY (SK…) from Console → Account → API keys & tokens — not your Auth Token. Create a new Standard API Key if unsure.",
+    );
+  }
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Twilio Account lookup failed (${res.status}): ${body.slice(0, 240)}`);
+  }
+}
+
+/** Voice grant AP… must exist on this account or the browser often shows 20101. */
+async function assertTwiMLApplicationExists(
+  accountSid: string,
+  apiKeySid: string,
+  apiSecret: string,
+  applicationSid: string,
+): Promise<void> {
+  const auth = btoa(`${apiKeySid}:${apiSecret}`);
+  const url =
+    `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Applications/${applicationSid}.json`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Basic ${auth}` },
+  });
+  if (res.status === 404) {
+    throw new Error(
+      `TwiML App ${applicationSid} was not found on this Account. Set TWILIO_TWIML_APP_SID to your Voice TwiML App under Console → Develop → Tools → TwiML apps (SID starts with AP).`,
+    );
+  }
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`TwiML App lookup failed (${res.status}): ${body.slice(0, 240)}`);
+  }
 }
 
 /** Twilio Voice JWT must use API Key SID (SK…), Account SID (AC…), TwiML App (AP…). Wrong shapes cause 20101 in the browser. */
@@ -52,6 +98,8 @@ Deno.serve(async (req) => {
     const twimlAppSid = requiredEnv("TWILIO_TWIML_APP_SID");
 
     assertTwilioCredentialShapes(accountSid, apiKey, twimlAppSid);
+    await assertApiKeyAuthenticates(accountSid, apiKey, apiSecret);
+    await assertTwiMLApplicationExists(accountSid, apiKey, apiSecret, twimlAppSid);
 
     const AccessToken = twilio.jwt.AccessToken;
     const VoiceGrant = AccessToken.VoiceGrant;

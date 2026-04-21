@@ -483,19 +483,23 @@
       };
 
       var response = await client.functions.invoke(functionName, { body: payload });
+      var data = response.data;
+
+      /** Edge returns { error } in JSON body; read that before generic invoke error text. */
+      if (data && typeof data.error === 'string' && data.error && !data.token) {
+        state.provider.twilioLastError = data.error;
+        emit('provider', { mode: state.provider.mode, error: state.provider.twilioLastError });
+        throw new Error(state.provider.twilioLastError);
+      }
+
       if (response.error) {
-        state.provider.twilioLastError = formatErr(response.error);
+        state.provider.twilioLastError =
+          data && typeof data.error === 'string' && data.error ? data.error : formatErr(response.error);
         emit('provider', { mode: state.provider.mode, error: state.provider.twilioLastError });
         throw new Error(state.provider.twilioLastError);
       }
 
-      if (response.data && response.data.error && !response.data.token) {
-        state.provider.twilioLastError = formatErr(response.data.error);
-        emit('provider', { mode: state.provider.mode, error: state.provider.twilioLastError });
-        throw new Error(state.provider.twilioLastError);
-      }
-
-      var token = response.data && response.data.token ? response.data.token : null;
+      var token = data && data.token ? data.token : null;
       if (!token) {
         state.provider.twilioLastError = 'Token response missing token property';
         emit('provider', { mode: state.provider.mode, error: state.provider.twilioLastError });
