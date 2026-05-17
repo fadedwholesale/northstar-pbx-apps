@@ -27,7 +27,7 @@
     } catch (e) {}
   }
 
-  /** Readable string for alerts/logging when err.message is missing (e.g. some Twilio/HTTP errors). */
+  /** Readable string for alerts/logging when err.message is missing. */
   function formatErr(err) {
     if (err == null) return 'Unknown error';
     if (typeof err === 'string') return err;
@@ -36,9 +36,8 @@
       err.msg ||
       err.error_description ||
       (typeof err.reason === 'string' ? err.reason : '');
-    /** Twilio Voice SDK often sets .code (e.g. 20101) with message on prototype. */
     if (!msg && typeof err.code !== 'undefined' && err.code !== null) {
-      msg = 'Twilio error ' + String(err.code);
+      msg = 'Phone service error ' + String(err.code);
     }
     var code = err.code;
     var name = err.name;
@@ -71,6 +70,8 @@
     /** @type {{ id:string, digits:string, name?:string, started:number, mute:boolean, hold:boolean, recording:boolean, conference:boolean, parkedSlot?:string } | null} */
     activeCall: null,
     pendingConference: false,
+    /** @type {string | null} */
+    twilioRecordingSid: null,
     provider: {
       mode: 'mock',
       twilioToken: null,
@@ -81,8 +82,117 @@
     },
     twilioDevice: null,
     twilioCall: null,
+    twilioIncomingCall: null,
+    inboundRinging: null,
     subscribers: [],
   };
+  var reauthInFlight = null;
+  /** Full re-register deferred until the active call ends (destroy/register would drop audio). */
+  var pendingVoiceRefreshReason = null;
+
+  function hasActiveVoiceSession() {
+    return !!(state.activeCall || state.twilioCall || state.twilioIncomingCall);
+  }
+
+  function flushPendingVoiceRefresh() {
+    if (!pendingVoiceRefreshReason || hasActiveVoiceSession()) return;
+    var reason = pendingVoiceRefreshReason;
+    pendingVoiceRefreshReason = null;
+    refreshVoiceRegistration(reason);
+  }
+
+  function onCallSessionEnded() {
+    flushPendingVoiceRefresh();
+  }
+
+  /** Twilio best practice: resolve mic permission before Device.register. */
+  async function prepareAudioInput() {
+    if (!global.navigator || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      return;
+    }
+    var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(function (t) {
+      t.stop();
+    });
+  }
+
+  async function applySavedAudioDevices(device) {
+    if (!device || !device.audio) return;
+    var settings = Telephony.getSettings();
+    if (settings.micId && typeof device.audio.setInputDevice === 'function') {
+      try {
+        await device.audio.setInputDevice(settings.micId);
+      } catch (e) {
+        console.warn('[NorthstarTelephony] setInputDevice', e);
+      }
+    }
+    if (settings.speakerId && device.audio.speakerDevices && typeof device.audio.speakerDevices.set === 'function') {
+      try {
+        await device.audio.speakerDevices.set(settings.speakerId);
+      } catch (e2) {
+        console.warn('[NorthstarTelephony] speakerDevices.set', e2);
+      }
+    }
+  }
+
+  /**
+   * In-call safe path: fetch a new token and call device.updateToken() only (no destroy/register).
+   */
+  function refreshAccessTokenOnly(reason, forceIdentity) {
+    if (reauthInFlight) return reauthInFlight;
+    reauthInFlight = Telephony.fetchTwilioAccessToken(
+      forceIdentity || state.provider.twilioIdentity || state.extension || 'agent'
+    )
+      .then(function () {
+        emit('provider', { mode: state.provider.mode, refreshed: true, recovery: reason || 'token-refresh' });
+      })
+      .catch(function (error) {
+        state.provider.twilioLastError = formatErr(error);
+        emit('provider', {
+          mode: state.provider.mode,
+          error: state.provider.twilioLastError,
+          recovery: reason || 'token-refresh',
+        });
+        emit('error', { message: state.provider.twilioLastError });
+        if (hasActiveVoiceSession()) {
+          pendingVoiceRefreshReason = reason || 'token-refresh-failed';
+        }
+      })
+      .finally(function () {
+        reauthInFlight = null;
+      });
+    return reauthInFlight;
+  }
+
+  function refreshVoiceRegistration(reason, forceIdentity) {
+    if (hasActiveVoiceSession()) {
+      if (reason === 'token-expiring') {
+        return refreshAccessTokenOnly(reason, forceIdentity);
+      }
+      pendingVoiceRefreshReason = reason || pendingVoiceRefreshReason || 'deferred';
+      console.warn(
+        '[NorthstarTelephony] queued full refresh after call (' + (reason || 'deferred') + ')'
+      );
+      return refreshAccessTokenOnly(reason || 'in-call-soft', forceIdentity);
+    }
+    if (reauthInFlight) return reauthInFlight;
+    reauthInFlight = Telephony.fetchTwilioAccessToken(
+      forceIdentity || state.provider.twilioIdentity || state.extension || 'agent'
+    )
+      .catch(function (error) {
+        state.provider.twilioLastError = formatErr(error);
+        emit('provider', {
+          mode: state.provider.mode,
+          error: state.provider.twilioLastError,
+          recovery: reason || 'refresh',
+        });
+        emit('error', { message: state.provider.twilioLastError });
+      })
+      .finally(function () {
+        reauthInFlight = null;
+      });
+    return reauthInFlight;
+  }
 
   function getTwilioGlobal() {
     return global.Twilio && global.Twilio.Device ? global.Twilio : null;
@@ -105,7 +215,7 @@
         }
         if (Date.now() - start > ms) {
           clearInterval(id);
-          reject(new Error('Twilio Voice SDK not loaded. Check network / script tag.'));
+          reject(new Error('Phone app did not load. Check your network and refresh the page.'));
         }
       }, 40);
     });
@@ -115,33 +225,103 @@
     return !!(getTwilioGlobal() && state.provider.twilioToken);
   }
 
-  function makeActiveCallModel(call, fallbackDigits, fallbackName) {
+  function makeActiveCallModel(call, fallbackDigits, fallbackName, directionHint) {
     var params = (call && call.parameters) || {};
-    var digits = params.To || params.to || fallbackDigits || '';
-    var name = params.CallerName || params.From || params.from || fallbackName || '';
+    var dir = directionHint === 'inbound' ? 'inbound' : 'outbound';
+    var digits;
+    var name;
+    if (dir === 'inbound') {
+      digits = params.From || params.from || fallbackDigits || '';
+      name = params.CallerName || params.From || fallbackName || 'Inbound';
+    } else {
+      digits = params.To || params.to || fallbackDigits || '';
+      name = params.CallerName || params.From || fallbackName || '';
+    }
+    var sid = (call && call.parameters && (call.parameters.CallSid || call.parameters.call_sid)) || null;
     return {
-      id: (call && call.parameters && (call.parameters.CallSid || call.parameters.call_sid)) || ('call_' + Date.now()),
+      id: sid || 'call_' + Date.now(),
       digits: digits,
       name: name,
+      direction: dir,
+      twilioSid: sid,
       started: Date.now(),
       mute: false,
       hold: false,
       recording: false,
       conference: false,
+      twilioRecordingSid: null,
     };
   }
 
-  function attachTwilioCallEvents(call) {
+  function normalizeInboundCaller(raw) {
+    var s = String(raw || '').trim();
+    if (s.toLowerCase().indexOf('client:') === 0) return s.slice(7).trim();
+    return s;
+  }
+
+  /** Persist missed inbound to Supabase inbox (same row shape as Twilio Dial webhook). */
+  function recordInboundMissToCloud(call, reason) {
+    try {
+      var inbox = global.NorthstarInbox;
+      if (!inbox || typeof inbox.recordMissedCall !== 'function') return;
+      var params = (call && call.parameters) || {};
+      var fromRaw = params.From || params.from || '';
+      var caller = normalizeInboundCaller(fromRaw);
+      if (!caller) return;
+      var name = (params.CallerName && String(params.CallerName).trim()) || caller || 'Inbound caller';
+      var sid = params.CallSid || params.call_sid || '';
+      inbox.recordMissedCall({
+        callerNumber: caller,
+        displayName: name,
+        reason: reason,
+        callSid: sid,
+      });
+    } catch (e) {
+      console.warn('[NorthstarTelephony] recordInboundMissToCloud', e);
+    }
+  }
+
+  function attachTwilioCallEvents(call, directionHint) {
     if (!call || typeof call.on !== 'function') return;
+    var dir = directionHint === 'inbound' ? 'inbound' : 'outbound';
+    var inboundAccepted = false;
+    var missedRecorded = false;
+
+    function tryRecordMissed(reason) {
+      if (dir !== 'inbound') return;
+      if (inboundAccepted || missedRecorded) return;
+      missedRecorded = true;
+      recordInboundMissToCloud(call, reason);
+    }
+
     call.on('accept', function () {
+      inboundAccepted = true;
       state.twilioCall = call;
-      state.activeCall = makeActiveCallModel(call, state.activeCall && state.activeCall.digits, state.activeCall && state.activeCall.name);
+      if (state.twilioIncomingCall === call) state.twilioIncomingCall = null;
+      state.inboundRinging = null;
+      state.activeCall = makeActiveCallModel(
+        call,
+        state.activeCall && state.activeCall.digits,
+        state.activeCall && state.activeCall.name,
+        dir
+      );
       emit('call', { phase: 'connected', call: state.activeCall });
     });
 
+    call.on('mute', function (isMuted) {
+      if (state.activeCall && !state.activeCall.hold) {
+        state.activeCall.mute = !!isMuted;
+        emit('call', { phase: 'mute', mute: state.activeCall.mute });
+      }
+    });
+
     call.on('disconnect', function () {
+      if (state.activeCall && state.activeCall.hold) {
+        state.activeCall.hold = false;
+        applyHoldMedia(false);
+      }
       var endedCall = state.activeCall;
-      if (endedCall) {
+      if (endedCall && dir === 'outbound') {
         var dur = Math.round((Date.now() - endedCall.started) / 1000);
         formatHistoryRow({
           id: 'h_' + Date.now(),
@@ -153,27 +333,54 @@
           result: 'completed',
         });
       }
+      if (dir === 'inbound') {
+        setTimeout(function () {
+          tryRecordMissed('no_answer');
+        }, 0);
+      }
       state.twilioCall = null;
+      if (state.twilioIncomingCall === call) state.twilioIncomingCall = null;
+      state.inboundRinging = null;
       state.activeCall = null;
       state.pendingConference = false;
+      state.twilioRecordingSid = null;
       emit('call', { phase: 'idle' });
+      onCallSessionEnded();
     });
 
     call.on('cancel', function () {
+      tryRecordMissed('caller_cancelled');
+      if (state.twilioIncomingCall === call) state.twilioIncomingCall = null;
+      state.inboundRinging = null;
       state.twilioCall = null;
       state.activeCall = null;
+      state.twilioRecordingSid = null;
       emit('call', { phase: 'idle' });
+      onCallSessionEnded();
     });
 
     call.on('reject', function () {
+      tryRecordMissed('declined');
+      if (state.twilioIncomingCall === call) state.twilioIncomingCall = null;
+      state.inboundRinging = null;
       state.twilioCall = null;
       state.activeCall = null;
+      state.twilioRecordingSid = null;
       emit('call', { phase: 'idle' });
+      onCallSessionEnded();
     });
 
     call.on('error', function (error) {
       state.provider.twilioLastError = formatErr(error);
       emit('error', { message: state.provider.twilioLastError });
+    });
+
+    call.on('warning', function (warningName, warningData) {
+      emit('call', {
+        phase: 'quality-warning',
+        name: warningName,
+        data: warningData,
+      });
     });
   }
 
@@ -190,6 +397,12 @@
       state.provider.mode = 'twilio-ready';
       state.provider.twilioDeviceRegistered = false;
       emit('provider', { mode: state.provider.mode });
+      if (hasActiveVoiceSession()) {
+        pendingVoiceRefreshReason = 'device-unregistered';
+        refreshAccessTokenOnly('device-unregistered-in-call');
+        return;
+      }
+      refreshVoiceRegistration('device-unregistered');
     });
 
     device.on('error', function (error) {
@@ -199,20 +412,27 @@
     });
 
     device.on('incoming', function (call) {
-      attachTwilioCallEvents(call);
+      attachTwilioCallEvents(call, 'inbound');
       var params = (call && call.parameters) || {};
-      emit('call', {
-        phase: 'ringing',
+      state.twilioIncomingCall = call;
+      state.inboundRinging = {
         from: params.From || params.from || 'Unknown',
         name: params.CallerName || params.From || 'Inbound caller',
+      };
+      emit('call', {
+        phase: 'ringing',
+        from: state.inboundRinging.from,
+        name: state.inboundRinging.name,
       });
-      try {
-        call.accept();
-      } catch (e) {}
     });
 
     device.on('tokenWillExpire', function () {
       emit('provider', { mode: state.provider.mode, tokenWillExpire: true });
+      if (hasActiveVoiceSession()) {
+        refreshAccessTokenOnly('token-expiring');
+      } else {
+        refreshVoiceRegistration('token-expiring');
+      }
     });
   }
 
@@ -222,6 +442,40 @@
         fn({ type: type, payload: payload });
       } catch (e) {}
     });
+  }
+
+  /** Apply mic + remote audio for agent-side hold (full PSTN hold music requires conference/TwiML). */
+  function applyHoldMedia(holdOn) {
+    if (!state.twilioCall) return;
+    try {
+      if (typeof state.twilioCall.mute === 'function') {
+        state.twilioCall.mute(holdOn ? true : !!(state.activeCall && state.activeCall.mute));
+      }
+      var rs =
+        typeof state.twilioCall.getRemoteStream === 'function'
+          ? state.twilioCall.getRemoteStream()
+          : null;
+      if (rs && rs.getAudioTracks) {
+        rs.getAudioTracks().forEach(function (t) {
+          t.enabled = !holdOn;
+        });
+      }
+    } catch (_e) {}
+  }
+
+  async function invokeTwilioCallAction(body) {
+    var supa = global.NorthstarSupabase;
+    if (!supa || typeof supa.getClient !== 'function' || !supa.isConfigured()) {
+      throw new Error('Sign in to use this action');
+    }
+    var client = supa.getClient();
+    var res = await client.functions.invoke('twilio-call-action', { body: body });
+    var data = res && res.data ? res.data : null;
+    if (data && typeof data.error === 'string' && data.error) {
+      throw new Error(data.error);
+    }
+    if (res.error) throw new Error(formatErr(res.error));
+    return data;
   }
 
   function normalizeDigits(input) {
@@ -301,8 +555,85 @@
       return JSON.parse(JSON.stringify(state));
     },
 
+    isCallActive: function () {
+      return hasActiveVoiceSession();
+    },
+
+    answerIncoming: async function () {
+      if (!state.twilioIncomingCall) return;
+      try {
+        if (
+          state.twilioDevice &&
+          state.twilioDevice.audio &&
+          typeof state.twilioDevice.audio.setInputDevice === 'function'
+        ) {
+          var micId = Telephony.getSettings().micId;
+          if (micId) await state.twilioDevice.audio.setInputDevice(micId);
+        }
+        state.twilioIncomingCall.accept();
+      } catch (e) {
+        state.provider.twilioLastError = formatErr(e);
+        emit('error', { message: state.provider.twilioLastError });
+      }
+      state.inboundRinging = null;
+    },
+
+    declineIncoming: function () {
+      if (!state.twilioIncomingCall) return;
+      try {
+        if (typeof state.twilioIncomingCall.reject === 'function') state.twilioIncomingCall.reject();
+        else if (typeof state.twilioIncomingCall.disconnect === 'function') state.twilioIncomingCall.disconnect();
+      } catch (e) {
+        state.provider.twilioLastError = formatErr(e);
+      }
+      state.twilioIncomingCall = null;
+      state.inboundRinging = null;
+      emit('call', { phase: 'idle' });
+    },
+
     getLines: function () {
       return state.lines.slice();
+    },
+
+    setLines: function (lines, preferredNumberE164) {
+      var next = Array.isArray(lines) ? lines.slice() : [];
+      next = next
+        .filter(function (l) {
+          return l && l.id && l.number;
+        })
+        .map(function (l, idx) {
+          return {
+            id: String(l.id || 'line' + (idx + 1)),
+            label: String(l.label || 'Line ' + (idx + 1)),
+            number: String(l.number || ''),
+            outbound: l.outbound !== false,
+          };
+        });
+      if (!next.length) return;
+      state.lines = next;
+      var pref = String(preferredNumberE164 || '').trim();
+      var prefIdx = -1;
+      if (pref) {
+        for (var i = 0; i < state.lines.length; i++) {
+          if (lineNumberToE164(state.lines[i]) === pref) {
+            prefIdx = i;
+            break;
+          }
+        }
+      }
+      if (prefIdx >= 0) state.callerIdIndex = prefIdx;
+      if (state.callerIdIndex < 0 || state.callerIdIndex >= state.lines.length) state.callerIdIndex = 0;
+      var lineId = state.lineId;
+      var lineExists = state.lines.some(function (l) {
+        return l.id === lineId;
+      });
+      if (!lineExists) state.lineId = state.lines[0].id;
+      emit('lines', {
+        lineId: state.lineId,
+        lines: state.lines.slice(),
+        callerIdIndex: state.callerIdIndex,
+      });
+      emit('callerId', { index: state.callerIdIndex });
     },
 
     setLine: function (lineId) {
@@ -347,7 +678,32 @@
       Object.assign(cur, partial);
       saveJson(STORAGE_SETTINGS, cur);
       emit('settings', cur);
+      if (state.twilioDevice && state.twilioDevice.audio) {
+        applySavedAudioDevices(state.twilioDevice).catch(function (e) {
+          console.warn('[NorthstarTelephony] applySavedAudioDevices', e);
+        });
+      }
       return cur;
+    },
+
+    listAudioDevices: async function () {
+      if (!global.navigator || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+        return { inputs: [], outputs: [] };
+      }
+      try {
+        await prepareAudioInput();
+      } catch (_e) {}
+      var list = await navigator.mediaDevices.enumerateDevices();
+      var inputs = [];
+      var outputs = [];
+      list.forEach(function (d) {
+        if (d.kind === 'audioinput') {
+          inputs.push({ id: d.deviceId, label: d.label || 'Microphone' });
+        } else if (d.kind === 'audiooutput') {
+          outputs.push({ id: d.deviceId, label: d.label || 'Speaker' });
+        }
+      });
+      return { inputs: inputs, outputs: outputs };
     },
 
     getCallHistory: function (limit) {
@@ -362,10 +718,10 @@
     registerTwilioDevice: async function () {
       var TwilioGlobal = getTwilioGlobal();
       if (!TwilioGlobal) {
-        throw new Error('Twilio Voice SDK not loaded');
+        throw new Error('Phone app did not load. Refresh the page.');
       }
       if (!state.provider.twilioToken) {
-        throw new Error('Twilio token missing');
+        throw new Error('Phone service is not signed in. Refresh or sign in again.');
       }
 
       if (state.twilioDevice && state.provider.twilioDeviceRegistered) {
@@ -378,9 +734,12 @@
         }
       } catch (e) {}
 
+      await prepareAudioInput();
+
       var device = new TwilioGlobal.Device(state.provider.twilioToken, {
         logLevel: 1,
-        edge: 'ashburn',
+        codecPreferences: ['opus', 'pcmu'],
+        maxCallSignalingReconnectMs: 30000,
       });
       setupTwilioDeviceEventBridge(device);
       state.twilioDevice = device;
@@ -396,7 +755,7 @@
             if (settled) return;
             settled = true;
             cleanup();
-            reject(new Error('Twilio registration timed out — check token and microphone permission'));
+            reject(new Error('Phone registration timed out — allow the microphone and try again.'));
           }, 25000);
 
           function cleanup() {
@@ -416,7 +775,7 @@
             if (settled) return;
             settled = true;
             cleanup();
-            reject(err != null ? err : new Error('Twilio Device error'));
+            reject(err != null ? err : new Error('Phone device error'));
           }
 
           device.on('registered', onRegistered);
@@ -437,6 +796,7 @@
         state.twilioDevice = null;
         throw new Error(formatErr(regErr));
       }
+      await applySavedAudioDevices(device);
       state.provider.twilioDeviceRegistered = true;
       state.provider.mode = 'twilio-registered';
       emit('provider', { mode: state.provider.mode });
@@ -455,7 +815,7 @@
       await waitForTwilioSDK(8000);
       var TwilioGlobal = getTwilioGlobal();
       if (!TwilioGlobal) {
-        throw new Error('Twilio Voice SDK not loaded. Check network / script tag.');
+        throw new Error('Phone app did not load. Check your network and refresh the page.');
       }
       if (state.twilioDevice && state.provider.twilioDeviceRegistered && state.provider.twilioToken) {
         return;
@@ -470,10 +830,10 @@
     fetchTwilioAccessToken: async function (identity) {
       var supa = global.NorthstarSupabase;
       if (!supa || typeof supa.getClient !== 'function' || !supa.isConfigured()) {
-        throw new Error('Supabase is not configured for Twilio token fetch');
+        throw new Error('Company account not connected. Sign in and refresh.');
       }
       var client = supa.getClient();
-      if (!client) throw new Error('Supabase client unavailable');
+      if (!client) throw new Error('Could not connect. Refresh the page.');
 
       var functionName = (supa.config && supa.config.twilioTokenFunction) || 'twilio-access-token';
       var payload = {
@@ -512,6 +872,29 @@
       state.provider.twilioIdentity = payload.identity;
       state.provider.twilioLastError = null;
       emit('provider', { mode: state.provider.mode, fetchedAt: state.provider.twilioTokenFetchedAt });
+      if (state.twilioDevice && typeof state.twilioDevice.updateToken === 'function') {
+        try {
+          await state.twilioDevice.updateToken(token);
+          if (!hasActiveVoiceSession()) {
+            if (!state.provider.twilioDeviceRegistered && typeof state.twilioDevice.register === 'function') {
+              await state.twilioDevice.register();
+            }
+          }
+          state.provider.twilioDeviceRegistered = true;
+          state.provider.mode = 'twilio-registered';
+          emit('provider', { mode: state.provider.mode, refreshed: true });
+          return token;
+        } catch (refreshErr) {
+          state.provider.twilioLastError = formatErr(refreshErr);
+          emit('provider', { mode: state.provider.mode, warning: state.provider.twilioLastError });
+          if (hasActiveVoiceSession()) {
+            return token;
+          }
+        }
+      }
+      if (hasActiveVoiceSession()) {
+        return token;
+      }
       await this.registerTwilioDevice();
       return token;
     },
@@ -569,23 +952,40 @@
         id: 'call_' + Date.now(),
         digits: e164To || digits,
         name: contactMeta && contactMeta.name,
+        direction: 'outbound',
         started: Date.now(),
         mute: false,
         hold: false,
         recording: false,
         conference: false,
+        twilioRecordingSid: null,
       };
 
-      if (wantsTwilio && twilioEnabled() && state.twilioDevice && state.provider.twilioDeviceRegistered) {
-        state.twilioDevice.connect({
-          params: {
-            To: e164To || digits,
-            lineId: state.lineId,
-            callerId: e164Caller,
-          },
+      function startTwilioDial() {
+        var connectPromise = Promise.resolve();
+        if (
+          state.twilioDevice &&
+          state.twilioDevice.audio &&
+          typeof state.twilioDevice.audio.setInputDevice === 'function'
+        ) {
+          var micId = Telephony.getSettings().micId;
+          if (micId) {
+            connectPromise = state.twilioDevice.audio.setInputDevice(micId).catch(function (e) {
+              console.warn('[NorthstarTelephony] setInputDevice before dial', e);
+            });
+          }
+        }
+        connectPromise.then(function () {
+          return state.twilioDevice.connect({
+            params: {
+              To: e164To || digits,
+              lineId: state.lineId,
+              callerId: e164Caller,
+            },
+          });
         }).then(function (call) {
           state.twilioCall = call;
-          attachTwilioCallEvents(call);
+          attachTwilioCallEvents(call, 'outbound');
         }).catch(function (error) {
           state.provider.twilioLastError = formatErr(error);
           emit('error', { message: state.provider.twilioLastError });
@@ -593,19 +993,47 @@
           state.activeCall = null;
           emit('call', { phase: 'idle' });
         });
+      }
+
+      if (wantsTwilio && twilioEnabled() && state.twilioDevice && state.provider.twilioDeviceRegistered) {
+        startTwilioDial();
       } else if (!wantsTwilio) {
         emit('call', { phase: 'connected', call: state.activeCall });
       } else {
-        state.provider.twilioLastError = 'Voice not registered yet — wait a moment and try again';
-        emit('error', { message: state.provider.twilioLastError });
-        state.activeCall = null;
-        emit('call', { phase: 'idle' });
+        Telephony.ensureVoiceReady(state.provider.twilioIdentity || state.extension || 'agent')
+          .then(function () {
+            if (!twilioEnabled() || !state.twilioDevice || !state.provider.twilioDeviceRegistered) {
+              throw new Error('Phone not ready yet');
+            }
+            startTwilioDial();
+          })
+          .catch(function (err) {
+            state.provider.twilioLastError = formatErr(err || new Error('Phone not ready — wait a moment and try again'));
+            emit('error', { message: state.provider.twilioLastError });
+            state.activeCall = null;
+            emit('call', { phase: 'idle' });
+          });
       }
     },
 
     hangup: function () {
-      if (state.twilioCall && typeof state.twilioCall.disconnect === 'function') {
-        state.twilioCall.disconnect();
+      var wantsTwilio = !!(state.provider && (state.provider.twilioDeviceRegistered || state.provider.twilioToken));
+      if (wantsTwilio) {
+        var attemptedTwilio = false;
+        if (state.twilioCall && typeof state.twilioCall.disconnect === 'function') {
+          attemptedTwilio = true;
+          try {
+            state.twilioCall.disconnect();
+          } catch (e) {}
+        }
+        if (state.twilioDevice && typeof state.twilioDevice.disconnectAll === 'function') {
+          attemptedTwilio = true;
+          try {
+            state.twilioDevice.disconnectAll();
+          } catch (e2) {}
+        }
+        if (attemptedTwilio) return;
+        emit('error', { message: 'Could not end the call. Refresh the page and try again.' });
         return;
       }
       if (!state.activeCall) return;
@@ -629,7 +1057,7 @@
       state.activeCall.mute = !state.activeCall.mute;
       if (state.twilioCall && typeof state.twilioCall.mute === 'function') {
         try {
-          state.twilioCall.mute(state.activeCall.mute);
+          state.twilioCall.mute(state.activeCall.hold ? true : state.activeCall.mute);
         } catch (e) {}
       }
       emit('call', { phase: 'mute', mute: state.activeCall.mute });
@@ -638,20 +1066,102 @@
     toggleHold: function () {
       if (!state.activeCall) return;
       state.activeCall.hold = !state.activeCall.hold;
+      applyHoldMedia(state.activeCall.hold);
       emit('call', { phase: 'hold', hold: state.activeCall.hold });
     },
 
-    toggleRecord: function () {
+    /** Force hold state (e.g. warm transfer prelude). */
+    setHold: function (on) {
       if (!state.activeCall) return;
-      state.activeCall.recording = !state.activeCall.recording;
-      emit('call', { phase: 'record', recording: state.activeCall.recording });
+      var want = !!on;
+      if (!!state.activeCall.hold === want) return;
+      state.activeCall.hold = want;
+      applyHoldMedia(want);
+      emit('call', { phase: 'hold', hold: want });
+    },
+
+    toggleRecord: async function () {
+      if (!state.activeCall) return false;
+      var params = (state.twilioCall && state.twilioCall.parameters) || {};
+      var callSid = params.CallSid || params.call_sid || '';
+      var nextOn = !state.activeCall.recording;
+
+      if (!state.twilioCall || !callSid || !global.NorthstarSupabase || !NorthstarSupabase.isConfigured()) {
+        state.activeCall.recording = nextOn;
+        emit('call', { phase: 'record', recording: state.activeCall.recording });
+        return state.activeCall.recording;
+      }
+
+      try {
+        if (nextOn) {
+          var started = await invokeTwilioCallAction({
+            action: 'start_recording',
+            callSid: callSid,
+          });
+          state.activeCall.recording = true;
+          state.activeCall.twilioRecordingSid =
+            started && started.recordingSid ? started.recordingSid : null;
+          state.twilioRecordingSid = state.activeCall.twilioRecordingSid;
+        } else {
+          await invokeTwilioCallAction({
+            action: 'stop_recording',
+            callSid: callSid,
+            recordingSid: state.activeCall.twilioRecordingSid || state.twilioRecordingSid || '',
+          });
+          state.activeCall.recording = false;
+          state.activeCall.twilioRecordingSid = null;
+          state.twilioRecordingSid = null;
+        }
+        emit('call', { phase: 'record', recording: state.activeCall.recording });
+      } catch (err) {
+        emit('error', { message: formatErr(err) });
+        return state.activeCall.recording;
+      }
       return state.activeCall.recording;
     },
 
-    /** Blind transfer — provider sends REFER */
-    transferBlind: function (destination) {
-      emit('transfer', { mode: 'blind', destination: destination });
-      Telephony.hangup();
+    /**
+     * Blind transfer — redirects the PSTN/partner leg via Twilio REST, then drops the agent browser leg.
+     * Falls back to hangup-only when not signed in or offline (demo).
+     */
+    transferBlind: async function (destination) {
+      var dest = String(destination || '').trim();
+      if (!dest) {
+        emit('error', { message: 'Enter a transfer destination' });
+        return;
+      }
+      var params = (state.twilioCall && state.twilioCall.parameters) || {};
+      var callSid = params.CallSid || params.call_sid || '';
+
+      if (!callSid) {
+        emit('error', { message: 'Call not connected yet — wait until audio is up, then transfer.' });
+        return;
+      }
+
+      if (!global.NorthstarSupabase || !NorthstarSupabase.isConfigured()) {
+        emit('transfer', { mode: 'blind', destination: dest, simulated: true });
+        Telephony.hangup();
+        return;
+      }
+
+      try {
+        await invokeTwilioCallAction({
+          action: 'blind_transfer',
+          callSid: callSid,
+          to: dest,
+        });
+      } catch (err) {
+        state.provider.twilioLastError = formatErr(err);
+        emit('error', { message: state.provider.twilioLastError });
+        return;
+      }
+
+      emit('transfer', { mode: 'blind', destination: dest });
+      try {
+        if (state.twilioCall && typeof state.twilioCall.disconnect === 'function') {
+          state.twilioCall.disconnect();
+        }
+      } catch (_e) {}
     },
 
     /** Warm transfer — consult then complete (UI modal in app) */
@@ -669,22 +1179,40 @@
     },
 
     mergeCalls: function () {
-      if (!state.activeCall) return;
-      state.activeCall.conference = true;
+      if (!state.twilioCall) {
+        if (!state.activeCall) return;
+        state.activeCall.conference = true;
+        state.pendingConference = false;
+        emit('conference', { phase: 'merged' });
+        return;
+      }
+      emit('error', {
+        message:
+          'Merge needs a multi-party line set up by your administrator. Use transfer to connect someone else, or add the second call from your desk phone.',
+      });
       state.pendingConference = false;
-      emit('conference', { phase: 'merged' });
     },
 
     flip: function () {
-      emit('flip', {});
+      var mob = Telephony.getSettings().mobileNumber;
+      var m = mob != null ? String(mob).trim() : '';
+      if (!m) {
+        emit('error', {
+          message: 'Add your mobile number under Settings → Mobile / simultaneous ring for flip-to-mobile.',
+        });
+        return Promise.resolve();
+      }
+      return Telephony.transferBlind(m);
     },
 
+    /** Local park slot + hold — does not hang up (PBX park orbit needs queue/conference on the trunk). */
     park: function () {
       if (!state.activeCall) return;
       var slot = String(Math.floor(Math.random() * 80) + 20);
       state.activeCall.parkedSlot = slot;
+      state.activeCall.hold = true;
+      applyHoldMedia(true);
       emit('park', { slot: slot });
-      Telephony.hangup();
     },
 
     pickupPark: function (slot) {
@@ -702,7 +1230,8 @@
     },
 
     simulateInboundRing: function () {
-      emit('call', { phase: 'ringing', from: '(210) 555-0900', name: 'Inbound queue' });
+      state.inboundRinging = { from: '(210) 555-0900', name: 'Inbound queue' };
+      emit('call', { phase: 'ringing', from: state.inboundRinging.from, name: state.inboundRinging.name });
     },
 
     formatError: formatErr,
