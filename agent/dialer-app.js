@@ -1795,8 +1795,22 @@
         } else if (ev.payload && (ev.payload.phase === 'connected' || ev.payload.phase === 'idle')) {
           inboundOffer = null;
           stopInboundAlerts();
+          if (
+            typeof NorthstarTelephony.getProviderStatus === 'function'
+          ) {
+            updateVoiceHealthChip(NorthstarTelephony.getProviderStatus());
+          }
         } else if (ev.payload && ev.payload.phase === 'quality-warning') {
+          if (
+            typeof NorthstarTelephony.isCallActive === 'function' &&
+            !NorthstarTelephony.isCallActive()
+          ) {
+            return;
+          }
           var wn = String(ev.payload.name || 'network');
+          if (wn === 'constant-audio-input-level' || wn === 'constantAudioInputLevel') {
+            return;
+          }
           setVoiceChipState(
             'recover',
             'Voice: quality issue',

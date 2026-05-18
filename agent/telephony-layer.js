@@ -89,6 +89,15 @@
   var reauthInFlight = null;
   /** Full re-register deferred until the active call ends (destroy/register would drop audio). */
   var pendingVoiceRefreshReason = null;
+  var lastVoiceRefreshAt = 0;
+  var lastUnregisterHandlerAt = 0;
+  var VOICE_REFRESH_COOLDOWN_MS = 45000;
+
+  /** Warnings that fire when idle/silent — not actionable call-quality failures. */
+  var IDLE_QUALITY_WARNING_NAMES = {
+    'constant-audio-input-level': true,
+    constantAudioInputLevel: true,
+  };
 
   function hasActiveVoiceSession() {
     return !!(state.activeCall || state.twilioCall || state.twilioIncomingCall);
@@ -144,7 +153,7 @@
       forceIdentity || state.provider.twilioIdentity || state.extension || 'agent'
     )
       .then(function () {
-        emit('provider', { mode: state.provider.mode, refreshed: true, recovery: reason || 'token-refresh' });
+        emit('provider', { mode: state.provider.mode, refreshed: true });
       })
       .catch(function (error) {
         state.provider.twilioLastError = formatErr(error);
@@ -175,6 +184,11 @@
       );
       return refreshAccessTokenOnly(reason || 'in-call-soft', forceIdentity);
     }
+    var now = Date.now();
+    if (now - lastVoiceRefreshAt < VOICE_REFRESH_COOLDOWN_MS) {
+      return Promise.resolve();
+    }
+    lastVoiceRefreshAt = now;
     if (reauthInFlight) return reauthInFlight;
     reauthInFlight = Telephony.fetchTwilioAccessToken(
       forceIdentity || state.provider.twilioIdentity || state.extension || 'agent'
@@ -376,6 +390,8 @@
     });
 
     call.on('warning', function (warningName, warningData) {
+      var wn = String(warningName || '');
+      if (IDLE_QUALITY_WARNING_NAMES[wn]) return;
       emit('call', {
         phase: 'quality-warning',
         name: warningName,
@@ -402,6 +418,11 @@
         refreshAccessTokenOnly('device-unregistered-in-call');
         return;
       }
+      var now = Date.now();
+      if (now - lastUnregisterHandlerAt < VOICE_REFRESH_COOLDOWN_MS) {
+        return;
+      }
+      lastUnregisterHandlerAt = now;
       refreshVoiceRegistration('device-unregistered');
     });
 
@@ -876,12 +897,21 @@
         try {
           await state.twilioDevice.updateToken(token);
           if (!hasActiveVoiceSession()) {
-            if (!state.provider.twilioDeviceRegistered && typeof state.twilioDevice.register === 'function') {
+            var devState = '';
+            try {
+              devState = String(state.twilioDevice.state || '').toLowerCase();
+            } catch (_s) {}
+            var needsRegister =
+              devState === 'unregistered' ||
+              (!devState && !state.provider.twilioDeviceRegistered);
+            if (needsRegister && typeof state.twilioDevice.register === 'function') {
               await state.twilioDevice.register();
             }
           }
-          state.provider.twilioDeviceRegistered = true;
-          state.provider.mode = 'twilio-registered';
+          if (state.provider.twilioDeviceRegistered || String(state.twilioDevice.state || '').toLowerCase() === 'registered') {
+            state.provider.twilioDeviceRegistered = true;
+            state.provider.mode = 'twilio-registered';
+          }
           emit('provider', { mode: state.provider.mode, refreshed: true });
           return token;
         } catch (refreshErr) {
