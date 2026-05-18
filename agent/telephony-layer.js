@@ -80,6 +80,7 @@
       twilioDeviceRegistered: false,
       twilioIdentity: null,
     },
+    voiceEdgePreference: null,
     twilioDevice: null,
     twilioCall: null,
     twilioIncomingCall: null,
@@ -98,6 +99,55 @@
     'constant-audio-input-level': true,
     constantAudioInputLevel: true,
   };
+
+  /**
+   * Twilio edge presets. Default "auto" = roaming (Global Low Latency — closest edge to the rep).
+   * Overseas employees should use auto/apac; US reps can use us or auto.
+   */
+  var VOICE_EDGE_PRESETS = {
+    auto: 'roaming',
+    roaming: 'roaming',
+    us: ['ashburn', 'umatilla'],
+    apac: ['singapore', 'sydney'],
+    eu: ['dublin', 'frankfurt'],
+    ashburn: 'ashburn',
+    umatilla: 'umatilla',
+    singapore: 'singapore',
+    sydney: 'sydney',
+    dublin: 'dublin',
+    frankfurt: 'frankfurt',
+    tokyo: 'tokyo',
+  };
+
+  function resolveVoiceEdges() {
+    var raw = '';
+    try {
+      var prof = global.NorthstarAuth && NorthstarAuth.getProfile ? NorthstarAuth.getProfile() : null;
+      if (prof && prof.voice_edge) raw = String(prof.voice_edge).trim().toLowerCase();
+    } catch (_e) {}
+    if (!raw && state.voiceEdgePreference) raw = String(state.voiceEdgePreference).trim().toLowerCase();
+    if (!raw) raw = String(Telephony.getSettings().voiceEdge || 'auto').trim().toLowerCase();
+    if (!raw || raw === 'auto') return 'roaming';
+    if (VOICE_EDGE_PRESETS[raw]) return VOICE_EDGE_PRESETS[raw];
+    if (raw.indexOf(',') !== -1) {
+      return raw
+        .split(',')
+        .map(function (x) {
+          return x.trim();
+        })
+        .filter(Boolean);
+    }
+    return raw;
+  }
+
+  function getVoiceDeviceOptions() {
+    return {
+      logLevel: 1,
+      codecPreferences: ['opus', 'pcmu'],
+      maxCallSignalingReconnectMs: 30000,
+      edge: resolveVoiceEdges(),
+    };
+  }
 
   function hasActiveVoiceSession() {
     return !!(state.activeCall || state.twilioCall || state.twilioIncomingCall);
@@ -421,6 +471,13 @@
         data: warningData,
       });
     });
+
+    call.on('warning-cleared', function (warningName) {
+      emit('call', {
+        phase: 'quality-warning-cleared',
+        name: warningName,
+      });
+    });
   }
 
   function setupTwilioDeviceEventBridge(device) {
@@ -429,7 +486,11 @@
     device.on('registered', function () {
       state.provider.mode = 'twilio-registered';
       state.provider.twilioDeviceRegistered = true;
-      emit('provider', { mode: state.provider.mode });
+      var edgeLabel = '';
+      try {
+        edgeLabel = device.edge ? String(device.edge) : '';
+      } catch (_e) {}
+      emit('provider', { mode: state.provider.mode, edge: edgeLabel });
     });
 
     device.on('unregistered', function () {
@@ -558,6 +619,7 @@
 
   function defaultSettings() {
     return {
+      voiceEdge: 'auto',
       micId: '',
       speakerId: '',
       ringtone: 'default',
@@ -609,6 +671,20 @@
     isVoiceRegistered: function () {
       if (syncProviderFromDeviceState()) return true;
       return !!state.provider.twilioDeviceRegistered;
+    },
+
+    /** Admin/profile edge preset (auto, us, apac, singapore, …). Applied on next Device setup. */
+    setVoiceEdgePreference: function (edge) {
+      state.voiceEdgePreference = String(edge || 'auto').trim().toLowerCase();
+    },
+
+    getVoiceEdgePreference: function () {
+      var raw = '';
+      try {
+        var prof = global.NorthstarAuth && NorthstarAuth.getProfile ? NorthstarAuth.getProfile() : null;
+        if (prof && prof.voice_edge) raw = String(prof.voice_edge).trim().toLowerCase();
+      } catch (_e) {}
+      return raw || state.voiceEdgePreference || Telephony.getSettings().voiceEdge || 'auto';
     },
 
     answerIncoming: async function () {
@@ -829,11 +905,7 @@
 
       await prepareAudioInput();
 
-      var device = new TwilioGlobal.Device(state.provider.twilioToken, {
-        logLevel: 1,
-        codecPreferences: ['opus', 'pcmu'],
-        maxCallSignalingReconnectMs: 30000,
-      });
+      var device = new TwilioGlobal.Device(state.provider.twilioToken, getVoiceDeviceOptions());
       setupTwilioDeviceEventBridge(device);
       state.twilioDevice = device;
       /**

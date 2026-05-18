@@ -5,11 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="northstar-supabase-url" content="https://gbffglopzqxmsvzazkfj.supabase.co" />
   <meta name="northstar-supabase-anon-key" content="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdiZmZnbG9wenF4bXN2emF6a2ZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3MDAzNjIsImV4cCI6MjA5MjI3NjM2Mn0.REMYzX_c-1cC3FKHmXVvn9JEouLVszt7A5GSkfNlgrk" />
+  <meta name="northstar-require-auth" content="true" />
   <title>Northstar — Admin</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%23111827' width='32' height='32' rx='6'/%3E%3Ctext x='16' y='22' text-anchor='middle' fill='%23fff' font-size='14' font-family='system-ui,sans-serif'%3EN%3C/text%3E%3C/svg%3E" />
   <link rel="stylesheet" href="shared.css" />
 </head>
 <body style="padding:16px;background:#f3f4f6">
-  <div class="shell">
+  <div id="authGate" style="display:flex;position:fixed;inset:0;z-index:10000;align-items:center;justify-content:center;background:rgba(243,244,246,0.98)">
+    <div style="background:#fff;border-radius:16px;padding:28px 32px;max-width:400px;width:92%;box-shadow:0 10px 40px rgba(0,0,0,0.08);border:1px solid #e5e7eb">
+      <p id="authChromeHint" style="margin:0 0 14px;font-size:11px;line-height:1.45;color:#92400e;background:#fffbeb;padding:10px;border-radius:8px;border:1px solid #fde68a">
+        If Chrome shows “Dangerous” on this <code>.vercel.app</code> preview URL, use <strong>Details → Visit this unsafe site</strong> only if you trust this deployment. For production, use a custom domain (e.g. <code>admin.northstaragents.us</code>) so the warning usually goes away.
+      </p>
+      <form id="adminAuthForm" autocomplete="on" style="margin:0" action="#" method="post">
+      <div style="font-weight:700;font-size:18px;margin-bottom:6px;color:#111">Sign in — Northstar Employee</div>
+      <p style="margin:0 0 18px;font-size:13px;color:#6b7280">Use your assigned employee account to access the admin and directory system.</p>
+      <label style="display:block;font-size:11px;color:#6b7280;margin-bottom:4px">Email</label>
+      <input id="authEmail" type="email" name="email" autocomplete="username" style="width:100%;padding:10px 12px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:14px;font-size:14px" placeholder="hello@northstaragents.us" />
+      <label style="display:block;font-size:11px;color:#6b7280;margin-bottom:4px">Password</label>
+      <input id="authPass" type="password" name="password" autocomplete="current-password" style="width:100%;padding:10px 12px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px;font-size:14px" />
+      <p id="authErr" style="min-height:18px;margin:8px 0;font-size:12px;color:#b91c1c"></p>
+      <button type="submit" id="authSubmit" class="qbtn" style="width:100%;justify-content:center;padding:12px">Sign in</button>
+      </form>
+    </div>
+  </div>
+
+  <noscript><p style="padding:24px;font-family:system-ui">Enable JavaScript to use Northstar Admin.</p></noscript>
+
+  <div class="shell" id="adminShell" style="display:none">
     <div class="topnav" style="flex-wrap:wrap;gap:10px">
       <div class="logo">Northstar Admin <span>Telephony & CRM</span></div>
       <nav class="admin-nav" aria-label="Admin sections">
@@ -26,9 +48,10 @@
       </nav>
       <div style="display:flex;align-items:center;gap:12px;margin-left:auto">
         <div class="user-pill">
-          <div class="av av-sm" style="background:#fef3c7;color:#92400e">AM</div>
-          <span>Super admin</span>
+          <div class="av av-sm" style="background:#fef3c7;color:#92400e" id="adminInitials">NA</div>
+          <span id="adminIdentity">Not signed in</span>
         </div>
+        <button type="button" id="btnAdminSignOut" class="db" style="display:none">Sign out</button>
       </div>
     </div>
 
@@ -36,106 +59,29 @@
     <div id="adm-overview" class="mgr-body admin-section on">
       <div class="mgr-top">
         <div class="mgr-card">
-          <div class="mgr-val">158</div>
+          <div class="mgr-val" id="ovLegsToday">0</div>
           <div class="mgr-lbl">Inbound + outbound legs today</div>
-          <div class="mgr-delta">CDR source: carrier / SIP</div>
+          <div class="mgr-delta">Source: <code>northstar_call_legs</code></div>
         </div>
         <div class="mgr-card">
-          <div class="mgr-val">36</div>
+          <div class="mgr-val" id="ovAnsweredToday">0</div>
           <div class="mgr-lbl">Answered / connected</div>
-          <div class="mgr-delta">Connect rate 22.8%</div>
+          <div class="mgr-delta" id="ovConnectRate">Connect rate 0%</div>
         </div>
         <div class="mgr-card">
-          <div class="mgr-val">9</div>
+          <div class="mgr-val" id="ovBookedToday">0</div>
           <div class="mgr-lbl">Booked appointments (CRM)</div>
-          <div class="mgr-delta" style="color:#f59e0b">— disposition mapped</div>
+          <div class="mgr-delta" id="ovBookedNote" style="color:#f59e0b">Live from <code>northstar_activities</code></div>
         </div>
         <div class="mgr-card">
-          <div class="mgr-val">1</div>
+          <div class="mgr-val" id="ovRecordingsToday">0</div>
           <div class="mgr-lbl">Recorded coaching samples</div>
-          <div class="mgr-delta">Retention policy applied</div>
+          <div class="mgr-delta">Rows with recording URL today</div>
         </div>
       </div>
 
       <div class="sec-hd">Live queue & seats</div>
-      <div class="seats-grid">
-        <div class="seat oncall">
-          <div class="seat-top">
-            <div class="av av-md">JD</div>
-            <div class="seat-info">
-              <div class="seat-name">James D. · Ext 102</div>
-              <div class="seat-role" style="display:flex;align-items:center;gap:5px"><span class="dot g"></span> On call · outbound leg</div>
-            </div>
-            <button type="button" class="db blu" style="font-size:10px;padding:4px 8px;width:auto" onclick="alert('Barge / whisper / monitor — bridge supervisor via carrier.')">Monitor</button>
-          </div>
-          <div class="seat-stats">
-            <div class="ss"><div class="ssv">39</div><div class="ssl">Dials</div></div>
-            <div class="ss"><div class="ssv">9</div><div class="ssl">Ans</div></div>
-            <div class="ss"><div class="ssv">2</div><div class="ssl">Appts</div></div>
-            <div class="ss"><div class="ssv">0</div><div class="ssl">QA flags</div></div>
-          </div>
-          <div class="seat-bar"><div class="seat-fill" style="width:72%;background:#22c55e"></div></div>
-        </div>
-
-        <div class="seat oncall">
-          <div class="seat-top">
-            <div class="av av-md" style="background:#ecfdf5;color:#065f46">SR</div>
-            <div class="seat-info">
-              <div class="seat-name">Sara R. · Ext 103</div>
-              <div class="seat-role" style="display:flex;align-items:center;gap:5px"><span class="dot g"></span> Available</div>
-            </div>
-            <button type="button" class="db blu" style="font-size:10px;padding:4px 8px;width:auto" onclick="alert('Skill-based queue membership')">Queues</button>
-          </div>
-          <div class="seat-stats">
-            <div class="ss"><div class="ssv">52</div><div class="ssl">Dials</div></div>
-            <div class="ss"><div class="ssv">14</div><div class="ssl">Ans</div></div>
-            <div class="ss"><div class="ssv">5</div><div class="ssl">Appts</div></div>
-            <div class="ss"><div class="ssv">1</div><div class="ssl">Closes</div></div>
-          </div>
-          <div class="seat-bar"><div class="seat-fill" style="width:91%;background:#22c55e"></div></div>
-        </div>
-
-        <div class="seat brk">
-          <div class="seat-top">
-            <div class="av av-md" style="background:#fffbeb;color:#b45309">MC</div>
-            <div class="seat-info">
-              <div class="seat-name">Marcus C. · Ext 104</div>
-              <div class="seat-role" style="display:flex;align-items:center;gap:5px"><span class="dot a"></span> Break (ACD paused)</div>
-            </div>
-            <button type="button" class="db" style="font-size:10px;padding:4px 8px;width:auto" onclick="alert('Supervisor message / Teams ping')">Ping</button>
-          </div>
-          <div class="seat-stats">
-            <div class="ss"><div class="ssv">29</div><div class="ssl">Dials</div></div>
-            <div class="ss"><div class="ssv">7</div><div class="ssl">Ans</div></div>
-            <div class="ss"><div class="ssv">1</div><div class="ssl">Appts</div></div>
-            <div class="ss"><div class="ssv">0</div><div class="ssl">Closes</div></div>
-          </div>
-          <div class="seat-bar"><div class="seat-fill" style="width:38%;background:#f59e0b"></div></div>
-        </div>
-
-        <div class="seat off">
-          <div class="seat-top">
-            <div class="av av-md" style="background:#f3f4f6;color:#9ca3af">TL</div>
-            <div class="seat-info">
-              <div class="seat-name">Tanya L. · Ext 105</div>
-              <div class="seat-role" style="display:flex;align-items:center;gap:5px"><span class="dot gr"></span> Offline</div>
-            </div>
-            <button type="button" class="db" style="font-size:10px;padding:4px 8px;width:auto">License</button>
-          </div>
-          <div class="seat-stats">
-            <div class="ss"><div class="ssv">0</div><div class="ssl">Dials</div></div>
-            <div class="ss"><div class="ssv">0</div><div class="ssl">Ans</div></div>
-            <div class="ss"><div class="ssv">0</div><div class="ssl">Appts</div></div>
-            <div class="ss"><div class="ssv">0</div><div class="ssl">Closes</div></div>
-          </div>
-          <div class="seat-bar"><div class="seat-fill" style="width:0%"></div></div>
-        </div>
-
-        <button type="button" class="add-seat" onclick="alert('Provision seat: Twilio/Telnyx SIP creds + extension + CRM tenant mapping.')">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.2"/><path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-          Add licensed seat
-        </button>
-      </div>
+      <div class="seats-grid" id="overviewSeatsGrid"></div>
 
       <div class="live-calls">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px">
@@ -151,14 +97,7 @@
               <th>Time</th><th>Direction</th><th>Agent</th><th>Party</th><th>Queue</th><th>Duration</th><th>Disposition</th><th>Recording</th>
             </tr>
           </thead>
-          <tbody id="adminCallRows">
-            <tr><td>09:14</td><td>Inbound</td><td>Queue</td><td>(210) 555-0900</td><td>Sales</td><td>0:45</td><td><span class="pill pill-a">Abandoned</span></td><td>—</td></tr>
-            <tr><td>09:22</td><td>Outbound</td><td>Sara R.</td><td>SA Luxury Detail</td><td>—</td><td>4:22</td><td><span class="pill pill-g">Booked</span></td><td><span style="color:#2563eb;cursor:pointer">▶</span></td></tr>
-            <tr><td>09:31</td><td>Outbound</td><td>Sara R.</td><td>El Rancho Grill</td><td>—</td><td>2:08</td><td><span class="pill pill-a">Callback</span></td><td><span style="color:#2563eb;cursor:pointer">▶</span></td></tr>
-            <tr><td>09:44</td><td>Outbound</td><td>James D.</td><td>78255 Plumbing</td><td>—</td><td>1:44</td><td><span class="pill pill-r">Not interested</span></td><td><span style="color:#2563eb;cursor:pointer">▶</span></td></tr>
-            <tr><td>10:02</td><td>Outbound</td><td>Marcus C.</td><td>Southside Roofing</td><td>—</td><td>3:51</td><td><span class="pill pill-g">Booked</span></td><td><span style="color:#2563eb;cursor:pointer">▶</span></td></tr>
-            <tr><td>Now</td><td>Outbound</td><td>James D.</td><td>Mike's Pro Detailing</td><td>—</td><td><span style="color:#22c55e;font-weight:500">Live</span></td><td><span class="pill pill-b">Open</span></td><td><span style="color:#9ca3af">—</span></td></tr>
-          </tbody>
+          <tbody id="adminCallRows"></tbody>
         </table>
       </div>
     </div>
@@ -169,11 +108,12 @@
         <div class="sec-hd">Supervision</div>
         <p class="hint">Production ties to carrier APIs for live calls in progress, queue position, and agent leg IDs for compliant bridge-in.</p>
         <div class="stat-subgrid" style="margin-top:12px">
-          <div class="stat-box"><div class="num">3</div><div class="lbl">Active conversations</div></div>
-          <div class="stat-box"><div class="num">7</div><div class="lbl">Waiting in queue</div></div>
-          <div class="stat-box"><div class="num">42s</div><div class="lbl">Longest wait</div></div>
-          <div class="stat-box"><div class="num">5%</div><div class="lbl">Abandon (rolling)</div></div>
+          <div class="stat-box"><div class="num" id="liveMetricActive">0</div><div class="lbl">Active conversations</div></div>
+          <div class="stat-box"><div class="num" id="liveMetricQueue">0</div><div class="lbl">Waiting in queue</div></div>
+          <div class="stat-box"><div class="num" id="liveMetricWait">0s</div><div class="lbl">Longest wait</div></div>
+          <div class="stat-box"><div class="num" id="liveMetricAbandon">0%</div><div class="lbl">Abandon (rolling)</div></div>
         </div>
+        <p id="liveMetricUpdated" class="hint" style="margin-top:8px">Waiting for live feed…</p>
       </div>
       <div class="panel">
         <div class="sec-hd">Emergency & maintenance</div>
@@ -186,16 +126,63 @@
     <div id="adm-users" class="mgr-body admin-section">
       <div class="panel">
         <div class="sec-hd">Directory</div>
-        <p class="hint">Sync users from SSO (OIDC/SCIM). Phone profile stores extension, outbound caller ID policy, recording eligibility, and queue memberships.</p>
+        <p class="hint">Create employee login + seat mapping. Saves to <code>auth.users</code>, <code>northstar_profiles</code>, and <code>northstar_team_members</code>.</p>
         <table class="data-table">
-          <thead><tr><th>Name</th><th>Extension</th><th>Role</th><th>Recording</th><th>Presence policy</th><th></th></tr></thead>
-          <tbody>
-            <tr><td>James D.</td><td class="mono">102</td><td>Agent</td><td>Allow</td><td>ACD controlled</td><td><button type="button" class="db blu" style="font-size:10px;padding:4px 8px">Edit</button></td></tr>
-            <tr><td>Sara R.</td><td class="mono">103</td><td>Agent</td><td>Allow</td><td>ACD controlled</td><td><button type="button" class="db blu" style="font-size:10px;padding:4px 8px">Edit</button></td></tr>
-            <tr><td>Marcus C.</td><td class="mono">104</td><td>Agent</td><td>Allow</td><td>ACD controlled</td><td><button type="button" class="db blu" style="font-size:10px;padding:4px 8px">Edit</button></td></tr>
-            <tr><td>Ops Admin</td><td class="mono">200</td><td>Supervisor</td><td>Monitor</td><td>Always on</td><td><button type="button" class="db blu" style="font-size:10px;padding:4px 8px">Edit</button></td></tr>
-          </tbody>
+          <thead><tr><th>Name</th><th>Email</th><th>Extension</th><th>Role</th><th>Twilio identity</th><th>Presence</th><th>Phone #</th><th></th></tr></thead>
+          <tbody id="adminTeamBody"></tbody>
         </table>
+      </div>
+      <div class="panel">
+        <div class="sec-hd">Add / edit employee</div>
+        <p class="hint">Email/password create the employee account. Leave password blank to auto-generate temporary credentials.</p>
+        <div class="settings-grid" style="margin-top:8px">
+          <div class="set-row"><label>Email (login)</label><input id="tmEmail" type="email" placeholder="agent@company.com" /></div>
+          <div class="set-row"><label>Temporary password</label><input id="tmPassword" type="text" placeholder="optional auto-generated if blank" /></div>
+          <div class="set-row"><label>Name</label><input id="tmName" type="text" placeholder="James D." /></div>
+          <div class="set-row"><label>Extension</label><input id="tmExt" type="text" placeholder="102" /></div>
+          <div class="set-row"><label>Role</label>
+            <select id="tmRole">
+              <option value="Agent">Agent</option>
+              <option value="Supervisor">Supervisor</option>
+              <option value="Admin">Admin</option>
+            </select>
+          </div>
+          <div class="set-row"><label>Twilio identity</label><input id="tmTwilio" type="text" placeholder="agent_jd" /></div>
+          <div class="set-row"><label>Voice region</label>
+            <select id="tmVoiceEdge">
+              <option value="auto">Auto — closest (overseas reps)</option>
+              <option value="apac">Asia-Pacific</option>
+              <option value="us">United States</option>
+              <option value="eu">Europe</option>
+              <option value="singapore">Singapore only</option>
+            </select>
+          </div>
+          <div class="set-row"><label>Assigned phone number</label>
+            <select id="tmPhone">
+              <option value="">Unassigned</option>
+            </select>
+          </div>
+          <div class="set-row"><label>Presence</label>
+            <select id="tmPres">
+              <option value="g">Available</option>
+              <option value="a">On break</option>
+              <option value="y">Busy</option>
+              <option value="gr">Offline</option>
+            </select>
+          </div>
+          <div class="set-row"><label>Dials (today baseline)</label><input id="tmDials" type="number" min="0" /></div>
+          <div class="set-row"><label>Appts (today baseline)</label><input id="tmAppts" type="number" min="0" /></div>
+          <div class="set-row"><label>Perf % (0-100)</label><input id="tmPct" type="number" min="0" max="100" /></div>
+        </div>
+        <label style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;font-size:11px;color:#374151">
+          <input id="tmNotifyUser" type="checkbox" checked />
+          Email user setup/reset link when account is created or changed
+        </label>
+        <p id="tmSaveStatus" class="hint" style="min-height:22px;margin-top:10px;font-size:12px" aria-live="polite"></p>
+        <div class="toolbar" style="margin-top:12px">
+          <button type="button" id="tmSaveBtn" onclick="NorthstarTeamAdmin.saveForm()">Save employee</button>
+          <button type="button" id="tmClearBtn" onclick="NorthstarTeamAdmin.clearForm()">Clear form</button>
+        </div>
       </div>
     </div>
 
@@ -205,13 +192,33 @@
         <div class="sec-hd">Number inventory</div>
         <table class="data-table">
           <thead><tr><th>DID</th><th>Type</th><th>Routes to</th><th>SMS</th><th>E911</th></tr></thead>
-          <tbody>
-            <tr><td class="mono">+1 (210) 791-6275</td><td>Main</td><td>Auto-attendant</td><td>Enabled</td><td>Linked HQ</td></tr>
-            <tr><td class="mono">+1 (210) 555-0199</td><td>Campaign</td><td>Outbound pool — agents</td><td>Off</td><td>N/A</td></tr>
-            <tr><td class="mono">+1 (210) 555-0144</td><td>Fax</td><td>Fax inbox</td><td>—</td><td>Linked HQ</td></tr>
-          </tbody>
+          <tbody id="numbersBody"></tbody>
         </table>
         <p class="hint">Order/port numbers via carrier; store compliance packets for local dialing regulations.</p>
+      </div>
+      <div class="panel">
+        <div class="sec-hd">Add / update number</div>
+        <p class="hint">Add DIDs to inventory and optionally push voice/SMS webhooks to Twilio for this number.</p>
+        <div class="settings-grid" style="margin-top:8px">
+          <div class="set-row"><label>Phone number (E.164)</label><input id="numE164" type="text" placeholder="+18302516478" /></div>
+          <div class="set-row"><label>Label</label><input id="numLabel" type="text" placeholder="Rep - New Hire" /></div>
+          <div class="set-row"><label>Type</label><input id="numType" type="text" placeholder="Agent / Main / Campaign" /></div>
+          <div class="set-row"><label>Routes to</label><input id="numRoutes" type="text" placeholder="Direct to agent" /></div>
+          <div class="set-row"><label>E911 location</label><input id="numE911" type="text" placeholder="HQ" /></div>
+          <div class="set-row"><label>Twilio Phone SID (PN...)</label><input id="numTwilioSid" type="text" placeholder="PNxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" /></div>
+        </div>
+        <label style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;font-size:11px;color:#374151">
+          <input id="numSmsEnabled" type="checkbox" checked />
+          SMS enabled
+        </label>
+        <label style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;margin-left:14px;font-size:11px;color:#374151">
+          <input id="numSyncTwilio" type="checkbox" checked />
+          Sync Twilio webhooks now
+        </label>
+        <div class="toolbar" style="margin-top:12px">
+          <button type="button" onclick="saveNumberFromForm()">Save number</button>
+          <button type="button" onclick="clearNumberForm()">Clear form</button>
+        </div>
       </div>
     </div>
 
@@ -237,10 +244,10 @@
     <!-- Analytics -->
     <div id="adm-analytics" class="mgr-body admin-section">
       <div class="stat-subgrid">
-        <div class="stat-box"><div class="num">92%</div><div class="lbl">Service level (60s)</div></div>
-        <div class="stat-box"><div class="num">48s</div><div class="lbl">Avg speed of answer</div></div>
-        <div class="stat-box"><div class="num">11%</div><div class="lbl">Abandon rate</div></div>
-        <div class="stat-box"><div class="num">3.4</div><div class="lbl">Occupancy (avg)</div></div>
+        <div class="stat-box"><div class="num" id="anServiceLevel">0%</div><div class="lbl">Service level (60s)</div></div>
+        <div class="stat-box"><div class="num" id="anAvgAnswer">0s</div><div class="lbl">Avg speed of answer</div></div>
+        <div class="stat-box"><div class="num" id="anAbandonRate">0%</div><div class="lbl">Abandon rate</div></div>
+        <div class="stat-box"><div class="num" id="anOccupancy">0.0</div><div class="lbl">Occupancy (avg)</div></div>
       </div>
       <div class="panel" style="margin-top:14px">
         <div class="sec-hd">Exports</div>
@@ -270,9 +277,25 @@
     <!-- CRM -->
     <div id="adm-crm" class="mgr-body admin-section">
       <div class="toolbar" style="margin-bottom:14px">
-        <button type="button" onclick="NorthstarCRM.seedDemo(); refreshCrmView();">Reload store</button>
+        <button type="button" onclick="syncCrmFromDb()">Sync from DB</button>
+        <button type="button" onclick="purgeOrphanCrmFromDb()">Remove CRM not on an active list (DB)</button>
         <button type="button" onclick="exportCrm()">Download JSON export</button>
-        <button type="button" onclick="if(confirm('Reset demo data?')){ NorthstarCRM.resetDemo(); refreshCrmView(); }">Reset demo</button>
+        <button type="button" onclick="openLeadImport()">Upload leads CSV/XLSX</button>
+        <input id="callListName" type="text" placeholder="Daily list name (optional)" style="min-width:220px" />
+        <input id="callListDate" type="date" />
+        <select id="leadAssignRep" style="min-width:180px">
+          <option value="">Assign to rep…</option>
+        </select>
+        <label style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:0.5px solid #e5e7eb;border-radius:8px;background:#fff;font-size:11px">
+          <input id="leadSplitEven" type="checkbox" />
+          Even split across all reps
+        </label>
+        <label style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:0.5px solid #e5e7eb;border-radius:8px;background:#fff;font-size:11px">
+          <input id="leadCreateDailyList" type="checkbox" checked />
+          Create daily call list items
+        </label>
+        <button type="button" onclick="refreshCallListsView()">Refresh call lists</button>
+        <input id="leadImportFile" type="file" accept=".csv,.xlsx,.xls" style="display:none" />
       </div>
       <div class="crm-grid">
         <div>
@@ -288,6 +311,8 @@
         <div class="panel">
           <div class="sec-hd">Pipeline stages</div>
           <ul id="crmStages" style="font-size:12px;line-height:1.7;padding-left:18px;color:#374151"></ul>
+          <div class="sec-hd" style="margin-top:16px">Daily call lists</div>
+          <div id="crmCallLists" style="font-size:12px;color:#374151;max-height:260px;overflow:auto"></div>
           <div class="sec-hd" style="margin-top:16px">Field mapping</div>
           <p class="hint">Map dispositions → CRM stages; push recording URL + CDR id for audit.</p>
         </div>
@@ -330,8 +355,11 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="supabase-config.js"></script>
-  <script src="crm-store.js"></script>
-  <script src="admin-app.js"></script>
+  <script src="auth-store.js"></script>
+  <script src="team-roster-store.js?v=202604271200"></script>
+  <script src="crm-store.js?v=202604271200"></script>
+  <script src="admin-app.js?v=202604271200"></script>
 </body>
 </html>

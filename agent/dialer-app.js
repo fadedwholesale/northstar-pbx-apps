@@ -9,6 +9,7 @@
     pendingSeat: false,
     /** Legacy Twilio Client label from profile (CRM rows may still reference this). */
     twilioIdentity: '',
+    voiceEdge: 'auto',
   };
 
   /** One-time install: when the agent returns to this tab, re-pull CRM so Admin deletes/lists show up without manual "CRM sync". */
@@ -24,6 +25,10 @@
     AGENT.smsNumberE164 = seat.smsNumberE164 || '';
     AGENT.pendingSeat = !!seat.pendingSeat;
     AGENT.twilioIdentity = seat.twilioIdentity ? String(seat.twilioIdentity).trim() : '';
+    AGENT.voiceEdge = seat.voiceEdge ? String(seat.voiceEdge).trim().toLowerCase() : 'auto';
+    if (typeof NorthstarTelephony.setVoiceEdgePreference === 'function') {
+      NorthstarTelephony.setVoiceEdgePreference(AGENT.voiceEdge);
+    }
   }
 
   function syncAgentFromAuth() {
@@ -765,7 +770,8 @@
       return;
     }
     if (mode === 'twilio-registered') {
-      setVoiceChipState('ok', 'Voice: ready', 'Ready to place and receive calls');
+      var edgeHint = p.edge ? ' · Edge: ' + p.edge : '';
+      setVoiceChipState('ok', 'Voice: ready', 'Ready to place and receive calls' + edgeHint);
       return;
     }
     if (mode.indexOf('twilio') === 0) {
@@ -1571,6 +1577,9 @@
           '<div class="set-row"><label>Extension</label><span style="font-size:13px">' +
           esc((prof && prof.extension) || AGENT.extension || '—') +
           '</span></div>' +
+          '<div class="set-row"><label>Voice region</label><span style="font-size:13px">' +
+          esc((prof && prof.voice_edge) || AGENT.voiceEdge || 'auto') +
+          '</span></div>' +
           '</div>' +
           (AGENT.pendingSeat && (!prof || !prof.twilio_client_identity)
             ? '<p class="hint" style="margin-top:10px;color:#b45309"><strong>Seat not fully linked.</strong> Ask your administrator to finish your phone setup in Admin so calling and stats work correctly.</p>'
@@ -1579,8 +1588,21 @@
         : '';
 
     var s = NorthstarTelephony.getSettings();
+    var voiceEdgeVal =
+      typeof NorthstarTelephony.getVoiceEdgePreference === 'function'
+        ? NorthstarTelephony.getVoiceEdgePreference()
+        : s.voiceEdge || 'auto';
     $('panel-settings').innerHTML =
       accountPanel +
+      '<motion class="panel"><div class="sec-hd">Voice network</div><div class="settings-grid">' +
+      '<div class="set-row"><label>Region</label><select id="setVoiceEdge">' +
+      '<option value="auto">Auto — closest to you (recommended overseas)</option>' +
+      '<option value="apac">Asia-Pacific (Singapore + Sydney)</option>' +
+      '<option value="us">United States (East + West)</option>' +
+      '<option value="eu">Europe (Dublin + Frankfurt)</option>' +
+      '<option value="singapore">Singapore only</option>' +
+      '</select></div></div>' +
+      '<p class="hint">Overseas reps: use <strong>Auto</strong> or <strong>Asia-Pacific</strong>. Hard refresh after changing.</p></div>' +
       '<div class="panel"><div class="sec-hd">Audio devices</div><div class="settings-grid">' +
       '<div class="set-row"><label>Microphone</label><select id="setMic"><option value="">System default</option></select></div>' +
       '<div class="set-row"><label>Speaker / ringer</label><select id="setSpk"><option value="">System default</option></select></div></div>' +
@@ -1602,6 +1624,8 @@
       '<button type="button" class="qbtn" style="margin-top:12px;width:auto" onclick="NSDialer.saveSettingsFromDom()">Save preferences</button></div>';
 
     populateAudioDeviceSelects(s.micId, s.speakerId);
+    var ve = $('setVoiceEdge');
+    if (ve) ve.value = voiceEdgeVal;
   }
 
   function populateAudioDeviceSelects(selectedMicId, selectedSpkId) {
@@ -1636,7 +1660,9 @@
   }
 
   function saveSettingsFromDom() {
+    var voiceEdge = ($('setVoiceEdge') && $('setVoiceEdge').value) || 'auto';
     NorthstarTelephony.saveSettings({
+      voiceEdge: voiceEdge,
       micId: ($('setMic') && $('setMic').value) || '',
       speakerId: ($('setSpk') && $('setSpk').value) || '',
       desktopNotifications: $('setDesk').checked,
@@ -1649,10 +1675,13 @@
       dndFrom: $('setDndF').value,
       dndTo: $('setDndT').value,
     });
+    if (typeof NorthstarTelephony.setVoiceEdgePreference === 'function') {
+      NorthstarTelephony.setVoiceEdgePreference(voiceEdge);
+    }
     if ($('setDesk').checked && typeof Notification !== 'undefined' && Notification.permission === 'default') {
       Notification.requestPermission().catch(function () {});
     }
-    alert('Preferences saved on this device.');
+    alert('Preferences saved. Hard refresh (Cmd+Shift+R) to apply a voice region change.');
   }
 
   function syncCrmNow() {
@@ -1824,11 +1853,17 @@
           if (wn === 'constant-audio-input-level' || wn === 'constantAudioInputLevel') {
             return;
           }
-          setVoiceChipState(
-            'recover',
-            'Voice: quality issue',
-            'Call quality warning: ' + wn + '. Check your internet or headset mic.'
-          );
+          var hint =
+            wn === 'low-mos'
+              ? 'Choppy audio — use wired internet, close VPN, and stay on this tab during the call.'
+              : wn === 'high-packets-lost-fraction' || wn === 'high-rtt'
+              ? 'Network dropping voice packets — switch to ethernet or move closer to your router.'
+              : 'Check your internet or headset mic.';
+          setVoiceChipState('recover', 'Voice: quality issue', wn + ': ' + hint);
+        } else if (ev.payload && ev.payload.phase === 'quality-warning-cleared') {
+          if (typeof NorthstarTelephony.getProviderStatus === 'function') {
+            updateVoiceHealthChip(NorthstarTelephony.getProviderStatus());
+          }
         }
         if (typeof NorthstarLiveOps !== 'undefined') {
           var telSt = NorthstarTelephony.getState();
