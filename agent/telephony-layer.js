@@ -103,6 +103,29 @@
     return !!(state.activeCall || state.twilioCall || state.twilioIncomingCall);
   }
 
+  function getDeviceStateName() {
+    if (!state.twilioDevice) return '';
+    try {
+      return String(state.twilioDevice.state || '').toLowerCase();
+    } catch (_e) {
+      return '';
+    }
+  }
+
+  function isDeviceRegisteredWithTwilio() {
+    var s = getDeviceStateName();
+    return s === 'registered';
+  }
+
+  function syncProviderFromDeviceState() {
+    if (isDeviceRegisteredWithTwilio()) {
+      state.provider.twilioDeviceRegistered = true;
+      state.provider.mode = 'twilio-registered';
+      return true;
+    }
+    return false;
+  }
+
   function flushPendingVoiceRefresh() {
     if (!pendingVoiceRefreshReason || hasActiveVoiceSession()) return;
     var reason = pendingVoiceRefreshReason;
@@ -410,6 +433,9 @@
     });
 
     device.on('unregistered', function () {
+      if (isDeviceRegisteredWithTwilio()) {
+        return;
+      }
       state.provider.mode = 'twilio-ready';
       state.provider.twilioDeviceRegistered = false;
       emit('provider', { mode: state.provider.mode });
@@ -423,7 +449,7 @@
         return;
       }
       lastUnregisterHandlerAt = now;
-      refreshVoiceRegistration('device-unregistered');
+      refreshAccessTokenOnly('device-unregistered');
     });
 
     device.on('error', function (error) {
@@ -578,6 +604,11 @@
 
     isCallActive: function () {
       return hasActiveVoiceSession();
+    },
+
+    isVoiceRegistered: function () {
+      if (syncProviderFromDeviceState()) return true;
+      return !!state.provider.twilioDeviceRegistered;
     },
 
     answerIncoming: async function () {
@@ -745,15 +776,56 @@
         throw new Error('Phone service is not signed in. Refresh or sign in again.');
       }
 
-      if (state.twilioDevice && state.provider.twilioDeviceRegistered) {
-        return state.twilioDevice;
-      }
-
-      try {
-        if (state.twilioDevice && typeof state.twilioDevice.destroy === 'function') {
-          state.twilioDevice.destroy();
+      if (state.twilioDevice) {
+        if (syncProviderFromDeviceState()) {
+          return state.twilioDevice;
         }
-      } catch (e) {}
+        if (state.provider.twilioDeviceRegistered) {
+          return state.twilioDevice;
+        }
+        var regState = getDeviceStateName();
+        if (regState === 'registering') {
+          return state.twilioDevice;
+        }
+        /** Re-register existing Device — do not destroy/recreate (causes WSTransport register loops). */
+        try {
+          await prepareAudioInput();
+          await new Promise(function (resolve, reject) {
+            var settled = false;
+            var timer = setTimeout(function () {
+              if (settled) return;
+              settled = true;
+              reject(new Error('Phone registration timed out — allow the microphone and try again.'));
+            }, 25000);
+            function done(err) {
+              if (settled) return;
+              settled = true;
+              clearTimeout(timer);
+              if (err) reject(err);
+              else resolve();
+            }
+            state.twilioDevice.once('registered', function () {
+              done();
+            });
+            state.twilioDevice.once('error', function (err) {
+              done(err || new Error('Phone device error'));
+            });
+            state.twilioDevice.register().catch(function (e) {
+              done(e);
+            });
+          });
+          syncProviderFromDeviceState();
+          await applySavedAudioDevices(state.twilioDevice);
+          return state.twilioDevice;
+        } catch (reRegErr) {
+          console.warn('[NorthstarTelephony] soft re-register failed, recreating device', reRegErr);
+          try {
+            if (typeof state.twilioDevice.destroy === 'function') state.twilioDevice.destroy();
+          } catch (_d) {}
+          state.twilioDevice = null;
+          state.provider.twilioDeviceRegistered = false;
+        }
+      }
 
       await prepareAudioInput();
 
@@ -838,6 +910,9 @@
       if (!TwilioGlobal) {
         throw new Error('Phone app did not load. Check your network and refresh the page.');
       }
+      if (state.twilioDevice && state.provider.twilioToken && syncProviderFromDeviceState()) {
+        return;
+      }
       if (state.twilioDevice && state.provider.twilioDeviceRegistered && state.provider.twilioToken) {
         return;
       }
@@ -887,7 +962,10 @@
         throw new Error(state.provider.twilioLastError);
       }
 
-      state.provider.mode = 'twilio-ready';
+      var alreadyRegistered = isDeviceRegisteredWithTwilio();
+      if (!alreadyRegistered) {
+        state.provider.mode = 'twilio-ready';
+      }
       state.provider.twilioToken = token;
       state.provider.twilioTokenFetchedAt = Date.now();
       state.provider.twilioIdentity = payload.identity;
@@ -896,22 +974,12 @@
       if (state.twilioDevice && typeof state.twilioDevice.updateToken === 'function') {
         try {
           await state.twilioDevice.updateToken(token);
-          if (!hasActiveVoiceSession()) {
-            var devState = '';
-            try {
-              devState = String(state.twilioDevice.state || '').toLowerCase();
-            } catch (_s) {}
-            var needsRegister =
-              devState === 'unregistered' ||
-              (!devState && !state.provider.twilioDeviceRegistered);
-            if (needsRegister && typeof state.twilioDevice.register === 'function') {
+          if (!hasActiveVoiceSession() && getDeviceStateName() === 'unregistered') {
+            if (typeof state.twilioDevice.register === 'function') {
               await state.twilioDevice.register();
             }
           }
-          if (state.provider.twilioDeviceRegistered || String(state.twilioDevice.state || '').toLowerCase() === 'registered') {
-            state.provider.twilioDeviceRegistered = true;
-            state.provider.mode = 'twilio-registered';
-          }
+          syncProviderFromDeviceState();
           emit('provider', { mode: state.provider.mode, refreshed: true });
           return token;
         } catch (refreshErr) {
@@ -923,6 +991,10 @@
         }
       }
       if (hasActiveVoiceSession()) {
+        return token;
+      }
+      if (isDeviceRegisteredWithTwilio()) {
+        syncProviderFromDeviceState();
         return token;
       }
       await this.registerTwilioDevice();

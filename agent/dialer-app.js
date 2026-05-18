@@ -1159,6 +1159,17 @@
     if (name === 'crm') renderCrmSync();
   }
 
+  function isVoiceAlreadyRegistered() {
+    if (typeof NorthstarTelephony.isVoiceRegistered === 'function') {
+      return NorthstarTelephony.isVoiceRegistered();
+    }
+    var p =
+      typeof NorthstarTelephony.getProviderStatus === 'function'
+        ? NorthstarTelephony.getProviderStatus()
+        : null;
+    return !!(p && p.twilioDeviceRegistered && p.mode === 'twilio-registered');
+  }
+
   function kickVoiceReady(reason) {
     if (
       typeof NorthstarTelephony === 'undefined' ||
@@ -1169,9 +1180,12 @@
     if (typeof NorthstarTelephony.isCallActive === 'function' && NorthstarTelephony.isCallActive()) {
       return;
     }
+    if (isVoiceAlreadyRegistered()) {
+      return;
+    }
     NorthstarTelephony.ensureVoiceReady(AGENT.id).catch(function (err) {
       console.warn(
-        '[Northstar dialer] voice keepalive (' + reason + ')',
+        '[Northstar dialer] voice recovery (' + reason + ')',
         err && err.message ? err.message : err
       );
     });
@@ -1179,9 +1193,8 @@
 
   function startVoiceKeepAlive() {
     if (voiceKeepAliveTimer) clearInterval(voiceKeepAliveTimer);
-    voiceKeepAliveTimer = setInterval(function () {
-      kickVoiceReady('interval');
-    }, 4 * 60 * 1000);
+    voiceKeepAliveTimer = null;
+    /** Token refresh is handled by Twilio tokenWillExpire — no 4-min polling (it caused re-register loops). */
     document.addEventListener('visibilitychange', function () {
       if (!document.hidden) kickVoiceReady('tab-visible');
     });
