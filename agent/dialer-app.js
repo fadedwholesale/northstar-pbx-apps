@@ -1594,7 +1594,7 @@
         : s.voiceEdge || 'auto';
     $('panel-settings').innerHTML =
       accountPanel +
-      '<motion class="panel"><div class="sec-hd">Voice network</div><div class="settings-grid">' +
+      '<div class="panel"><div class="sec-hd">Voice network</div><div class="settings-grid">' +
       '<div class="set-row"><label>Region</label><select id="setVoiceEdge">' +
       '<option value="auto">Auto — closest to you (recommended overseas)</option>' +
       '<option value="apac">Asia-Pacific (Singapore + Sydney)</option>' +
