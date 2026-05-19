@@ -954,6 +954,19 @@
       lastOutcome: type,
     };
     if (lead.contactId) upsertPayload.id = lead.contactId;
+    if (typeof NorthstarCRM !== 'undefined' && typeof NorthstarCRM.listContacts === 'function' && lead.contactId) {
+      var owned = NorthstarCRM.listContacts().filter(function (c) {
+        return String(c.id) === String(lead.contactId);
+      })[0];
+      if (owned) {
+        if (owned.assignedAgentId) upsertPayload.assignedAgentId = owned.assignedAgentId;
+        if (owned.assignedAgentName) upsertPayload.assignedAgentName = owned.assignedAgentName;
+      }
+    }
+    if (!upsertPayload.assignedAgentId && AGENT && AGENT.id) {
+      upsertPayload.assignedAgentId = AGENT.id;
+      upsertPayload.assignedAgentName = AGENT.name || AGENT.id;
+    }
     var r = NorthstarCRM.upsertContact(upsertPayload);
     var resolvedContactId = (r && r.contact && r.contact.id) || lead.contactId || null;
     var activityRes = NorthstarCRM.logActivity({

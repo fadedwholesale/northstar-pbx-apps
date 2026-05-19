@@ -278,6 +278,7 @@
     <div id="adm-crm" class="mgr-body admin-section">
       <div class="toolbar" style="margin-bottom:14px">
         <button type="button" onclick="syncCrmFromDb()">Sync from DB</button>
+        <button type="button" onclick="repairContactOwnership()">Repair lead ownership</button>
         <button type="button" onclick="purgeOrphanCrmFromDb()">Remove CRM not on an active list (DB)</button>
         <button type="button" onclick="exportCrm()">Download JSON export</button>
         <button type="button" onclick="openLeadImport()">Upload leads CSV/XLSX</button>
@@ -360,8 +361,8 @@
   <script src="supabase-config.js"></script>
   <script src="auth-store.js"></script>
   <script src="team-roster-store.js?v=202604271200"></script>
-  <script src="crm-store.js?v=202604271200"></script>
+  <script src="crm-store.js?v=202605191400"></script>
   <script src="lead-categories.js?v=202605191200"></script>
-  <script src="admin-app.js?v=202605191200"></script>
+  <script src="admin-app.js?v=202605191400"></script>
 </body>
 </html>

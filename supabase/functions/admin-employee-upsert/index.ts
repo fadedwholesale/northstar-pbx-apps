@@ -203,6 +203,50 @@ Deno.serve(async (req) => {
     );
     if (profileUp.error) throw profileUp.error;
 
+    const oldTwilio = String(oldProfile?.twilio_client_identity || "").trim();
+    const ownershipKeys = new Set<string>();
+    if (userId) ownershipKeys.add(userId);
+    if (twilioIdentity) ownershipKeys.add(twilioIdentity);
+    if (oldTwilio) ownershipKeys.add(oldTwilio);
+
+    // Keep display name on assigned leads in sync when a rep is renamed (does not change assignment id).
+    for (const key of ownershipKeys) {
+      const touchContacts = await admin
+        .from("northstar_contacts")
+        .update({ assigned_agent_name: name, updated_at: new Date().toISOString() })
+        .eq("assigned_agent_id", key);
+      if (touchContacts.error) throw touchContacts.error;
+
+      const touchListItems = await admin
+        .from("northstar_call_list_items")
+        .update({ assigned_agent_name: name, updated_at: new Date().toISOString() })
+        .eq("assigned_agent_id", key);
+      if (touchListItems.error) throw touchListItems.error;
+    }
+
+    // If Twilio identity changed, migrate legacy assigned_agent_id on leads to the stable auth user id.
+    if (oldTwilio && twilioIdentity && oldTwilio !== twilioIdentity && userId) {
+      const migrateContacts = await admin
+        .from("northstar_contacts")
+        .update({
+          assigned_agent_id: userId,
+          assigned_agent_name: name,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("assigned_agent_id", oldTwilio);
+      if (migrateContacts.error) throw migrateContacts.error;
+
+      const migrateItems = await admin
+        .from("northstar_call_list_items")
+        .update({
+          assigned_agent_id: userId,
+          assigned_agent_name: name,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("assigned_agent_id", oldTwilio);
+      if (migrateItems.error) throw migrateItems.error;
+    }
+
     // Keep roster linkage in sync: one auth profile per seat.
     const clearRosterLink = await admin
       .from("northstar_team_members")

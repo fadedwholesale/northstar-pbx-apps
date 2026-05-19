@@ -29,6 +29,125 @@
     return String(m.profileId || m.twilioIdentity || m.id || '').trim();
   }
 
+  function resolveOwnerLabel(c) {
+    if (!c) return '';
+    var name = String(c.assignedAgentName || '').trim();
+    if (name) return name;
+    var id = String(c.assignedAgentId || '').trim();
+    if (!id) return '';
+    if (typeof NorthstarTeamRoster === 'undefined' || !NorthstarTeamRoster.getMembers) return id;
+    var reps = NorthstarTeamRoster.getMembers();
+    for (var i = 0; i < reps.length; i++) {
+      var r = reps[i];
+      if (seatAgentKey(r) === id || String(r.twilioIdentity || '') === id || String(r.id || '') === id) {
+        return r.name || id;
+      }
+    }
+    return id;
+  }
+
+  /**
+   * Restore contact ownership cleared by partial CRM updates (e.g. disposition without assignment fields).
+   * Uses the newest active call-list row per contact as source of truth.
+   */
+  async function repairContactOwnershipFromCallLists() {
+    var client = getClient();
+    if (!client || typeof NorthstarCRM === 'undefined' || !NorthstarCRM.upsertContactAwaitRemote) {
+      return { repaired: 0 };
+    }
+    var listIds = [];
+    var from = 0;
+    var page = 500;
+    while (true) {
+      var listsRes = await client
+        .from('northstar_call_lists')
+        .select('id')
+        .eq('status', 'active')
+        .range(from, from + page - 1);
+      if (listsRes.error) throw listsRes.error;
+      var chunk = listsRes.data || [];
+      chunk.forEach(function (row) {
+        if (row && row.id) listIds.push(row.id);
+      });
+      if (chunk.length < page) break;
+      from += page;
+    }
+    if (!listIds.length) return { repaired: 0 };
+
+    var byContact = {};
+    for (var li = 0; li < listIds.length; li += 40) {
+      var slice = listIds.slice(li, li + 40);
+      var itemsRes = await client
+        .from('northstar_call_list_items')
+        .select('contact_id,assigned_agent_id,assigned_agent_name,updated_at')
+        .in('list_id', slice)
+        .not('contact_id', 'is', null);
+      if (itemsRes.error) throw itemsRes.error;
+      (itemsRes.data || []).forEach(function (it) {
+        var cid = String(it.contact_id || '').trim();
+        var aid = String(it.assigned_agent_id || '').trim();
+        if (!cid || !aid) return;
+        var prev = byContact[cid];
+        var ts = new Date(it.updated_at || 0).getTime();
+        if (!prev || ts >= prev.ts) {
+          byContact[cid] = {
+            id: aid,
+            name: String(it.assigned_agent_name || '').trim() || resolveOwnerLabel({ assignedAgentId: aid }),
+            ts: ts,
+          };
+        }
+      });
+    }
+
+    var contacts = NorthstarCRM.listContacts();
+    var repaired = 0;
+    for (var contactId in byContact) {
+      if (!Object.prototype.hasOwnProperty.call(byContact, contactId)) continue;
+      var own = byContact[contactId];
+      var c = contacts.filter(function (x) {
+        return String(x.id) === contactId;
+      })[0];
+      if (!c) continue;
+      var curId = String(c.assignedAgentId || '').trim();
+      var curName = String(c.assignedAgentName || '').trim();
+      if (curId && curName) continue;
+      await NorthstarCRM.upsertContactAwaitRemote({
+        id: c.id,
+        business: c.business,
+        name: c.name,
+        phone: c.phone,
+        city: c.city,
+        vertical: c.vertical,
+        stage: c.stage,
+        lastOutcome: c.lastOutcome,
+        assignedAgentId: own.id,
+        assignedAgentName: own.name,
+      });
+      repaired++;
+    }
+    return { repaired: repaired };
+  }
+
+  window.repairContactOwnership = async function repairContactOwnership() {
+    try {
+      if (typeof NorthstarCRM !== 'undefined' && NorthstarCRM.syncFromRemote) {
+        await NorthstarCRM.syncFromRemote();
+      }
+      var r = await repairContactOwnershipFromCallLists();
+      if (typeof NorthstarCRM !== 'undefined' && NorthstarCRM.syncFromRemote) {
+        await NorthstarCRM.syncFromRemote();
+      }
+      pumpCrmPaint();
+      alert(
+        r.repaired
+          ? 'Restored ownership on ' + r.repaired + ' contact(s) from active call lists.'
+          : 'No contacts needed ownership repair (or no active list assignments found).'
+      );
+    } catch (e) {
+      alert('Repair failed: ' + (e && e.message ? e.message : String(e)));
+    }
+  };
+
   function seatWrapClass(status) {
     if (status === 'gr') return 'seat off';
     if (status === 'a' || status === 'y') return 'seat brk';
@@ -1338,6 +1457,12 @@
       var r = await NorthstarCRM.syncFromRemote();
       if (r && r.synced === false && r.reason === 'supabase-not-configured') {
         alert('Supabase is not configured; nothing to sync.');
+        return;
+      }
+      var fix = await repairContactOwnershipFromCallLists();
+      if (fix.repaired) {
+        await NorthstarCRM.syncFromRemote();
+        alert('Synced from DB and restored ownership on ' + fix.repaired + ' contact(s).');
       }
     } catch (e) {
       var msg = e && e.message ? e.message : String(e);
@@ -1501,10 +1626,8 @@
             esc(c.stage) +
             '</span> ' +
             (c.lastOutcome ? '<span class="pill pill-gr">' + esc(c.lastOutcome) + '</span>' : '') +
-            (c.assignedAgentName
-              ? ' <span class="pill pill-g">Owner: ' + esc(c.assignedAgentName) + '</span>'
-              : c.assignedAgentId
-              ? ' <span class="pill pill-g">Owner: ' + esc(c.assignedAgentId) + '</span>'
+            (resolveOwnerLabel(c)
+              ? ' <span class="pill pill-g">Owner: ' + esc(resolveOwnerLabel(c)) + '</span>'
               : ' <span class="pill pill-a">Unassigned</span>') +
             '</p></div>'
           );
