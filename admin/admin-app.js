@@ -195,6 +195,103 @@
     return { repaired: repaired };
   }
 
+  /** Rewrite vertical on active call-list rows + contacts using category column or business-name inference. */
+  async function reclassifyActiveListCategories() {
+    var client = getClient();
+    if (!client || typeof NorthstarCRM === 'undefined' || !NorthstarCRM.upsertContactAwaitRemote) {
+      return { updated: 0 };
+    }
+    var listIds = [];
+    var from = 0;
+    var page = 500;
+    while (true) {
+      var listsRes = await client
+        .from('northstar_call_lists')
+        .select('id')
+        .eq('status', 'active')
+        .range(from, from + page - 1);
+      if (listsRes.error) throw listsRes.error;
+      var chunk = listsRes.data || [];
+      chunk.forEach(function (row) {
+        if (row && row.id) listIds.push(row.id);
+      });
+      if (chunk.length < page) break;
+      from += page;
+    }
+    if (!listIds.length) return { updated: 0 };
+
+    var contacts = NorthstarCRM.listContacts();
+    var contactById = {};
+    contacts.forEach(function (c) {
+      if (c && c.id) contactById[c.id] = c;
+    });
+    var updated = 0;
+
+    for (var li = 0; li < listIds.length; li += 40) {
+      var slice = listIds.slice(li, li + 40);
+      var itemsRes = await client
+        .from('northstar_call_list_items')
+        .select('id,contact_id,business,contact_name,vertical')
+        .in('list_id', slice);
+      if (itemsRes.error) throw itemsRes.error;
+      for (var ii = 0; ii < (itemsRes.data || []).length; ii++) {
+        var it = itemsRes.data[ii];
+        var biz = String(it.business || '').trim();
+        var cname = String(it.contact_name || '').trim();
+        var rawVert = String(it.vertical || '').trim();
+        var nextVert = 'General';
+        if (typeof NorthstarLeadCategories !== 'undefined' && typeof NorthstarLeadCategories.infer === 'function') {
+          nextVert = NorthstarLeadCategories.infer(rawVert, biz, cname);
+        } else if (typeof NorthstarLeadCategories !== 'undefined') {
+          nextVert = NorthstarLeadCategories.normalize(rawVert || biz);
+        }
+        if (!nextVert || nextVert === rawVert) continue;
+        await client
+          .from('northstar_call_list_items')
+          .update({ vertical: nextVert, updated_at: new Date().toISOString() })
+          .eq('id', it.id);
+        var cid = String(it.contact_id || '').trim();
+        if (cid && contactById[cid]) {
+          var c = contactById[cid];
+          await NorthstarCRM.upsertContactAwaitRemote({
+            id: c.id,
+            business: c.business,
+            name: c.name,
+            phone: c.phone,
+            city: c.city,
+            vertical: nextVert,
+            stage: c.stage,
+            lastOutcome: c.lastOutcome,
+            assignedAgentId: c.assignedAgentId,
+            assignedAgentName: c.assignedAgentName,
+          });
+        }
+        updated++;
+      }
+    }
+    return { updated: updated };
+  }
+
+  window.reclassifyLeadCategories = async function reclassifyLeadCategories() {
+    try {
+      if (typeof NorthstarCRM !== 'undefined' && NorthstarCRM.syncFromRemote) {
+        await NorthstarCRM.syncFromRemote();
+      }
+      var r = await reclassifyActiveListCategories();
+      if (typeof NorthstarCRM !== 'undefined' && NorthstarCRM.syncFromRemote) {
+        await NorthstarCRM.syncFromRemote();
+      }
+      pumpCrmPaint();
+      alert(
+        r.updated
+          ? 'Updated category on ' + r.updated + ' lead(s). Reps should refresh the phone app.'
+          : 'No category changes needed (or no active call list found).'
+      );
+    } catch (e) {
+      alert('Reclassify failed: ' + (e && e.message ? e.message : String(e)));
+    }
+  };
+
   window.repairContactOwnership = async function repairContactOwnership() {
     try {
       if (typeof NorthstarCRM !== 'undefined' && NorthstarCRM.syncFromRemote) {
@@ -2053,20 +2150,42 @@
         var city = firstValue(canon, ['city', 'town']);
         var rawCategory = firstValue(canon, [
           'category',
+          'categories',
           'vertical',
+          'verticals',
           'industry',
+          'industries',
           'type',
-          'campaign',
-          'segment',
           'leadtype',
+          'leadcategory',
           'leadcampaign',
+          'campaign',
+          'campaignname',
+          'segment',
           'businesstype',
+          'listtype',
+          'listname',
+          'niche',
+          'market',
+          'sector',
         ]);
+        var bizLabel = business || name || '';
         var vertical = 'General';
-        if (typeof NorthstarLeadCategories !== 'undefined' && typeof NorthstarLeadCategories.normalize === 'function') {
+        if (typeof NorthstarLeadCategories !== 'undefined' && typeof NorthstarLeadCategories.infer === 'function') {
+          vertical = NorthstarLeadCategories.infer(rawCategory, bizLabel, name);
+        } else if (typeof NorthstarLeadCategories !== 'undefined' && typeof NorthstarLeadCategories.normalize === 'function') {
           vertical = NorthstarLeadCategories.normalize(rawCategory);
         } else if (rawCategory) {
           vertical = String(rawCategory).trim() || 'General';
+        }
+        var defaultCatEl = document.getElementById('leadDefaultCategory');
+        var defaultCat = defaultCatEl ? String(defaultCatEl.value || '').trim() : '';
+        if (vertical === 'General' && defaultCat && defaultCat !== 'auto') {
+          if (typeof NorthstarLeadCategories !== 'undefined' && typeof NorthstarLeadCategories.normalize === 'function') {
+            vertical = NorthstarLeadCategories.normalize(defaultCat);
+          } else {
+            vertical = defaultCat;
+          }
         }
         var stage = firstValue(canon, ['stage']) || 'New';
         if (!business && !cleanedPhone && !name) return null;

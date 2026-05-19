@@ -162,6 +162,13 @@
     } catch (e) { return iso; }
   }
 
+  function inferLeadCategory(raw, business, contactName) {
+    if (global.NorthstarLeadCategories && typeof NorthstarLeadCategories.infer === 'function') {
+      return NorthstarLeadCategories.infer(raw, business, contactName);
+    }
+    return normalizeLeadCategory(raw);
+  }
+
   function normalizeLeadCategory(raw) {
     if (global.NorthstarLeadCategories && typeof NorthstarLeadCategories.normalize === 'function') {
       return NorthstarLeadCategories.normalize(raw);
@@ -240,9 +247,9 @@
       biz: c.business || 'Unknown',
       name: c.name || '',
       phone: c.phone || '',
-      vert: normalizeLeadCategory(c.vertical),
+      vert: inferLeadCategory(c.vertical, c.business, c.name),
       city: c.city || '',
-      tag: categoryTagClass(c.vertical),
+      tag: categoryTagClass(inferLeadCategory(c.vertical, c.business, c.name)),
     };
   }
 
@@ -254,9 +261,9 @@
       biz: q.business || 'Unknown',
       name: q.contact_name || '',
       phone: q.phone || '',
-      vert: normalizeLeadCategory(q.vertical),
+      vert: inferLeadCategory(q.vertical, q.business, q.contact_name),
       city: q.city || '',
-      tag: categoryTagClass(q.vertical),
+      tag: categoryTagClass(inferLeadCategory(q.vertical, q.business, q.contact_name)),
       status: q.status || 'new',
       attempts: Number(q.attempts) || 0,
       nextActionAt: q.next_action_at || null,

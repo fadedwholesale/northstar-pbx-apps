@@ -279,6 +279,7 @@
       <div class="toolbar" style="margin-bottom:14px">
         <button type="button" onclick="syncCrmFromDb()">Sync from DB</button>
         <button type="button" onclick="repairContactOwnership()">Repair lead ownership</button>
+        <button type="button" onclick="reclassifyLeadCategories()">Fix lead categories</button>
         <button type="button" onclick="purgeOrphanCrmFromDb()">Remove CRM not on an active list (DB)</button>
         <button type="button" onclick="exportCrm()">Download JSON export</button>
         <button type="button" onclick="openLeadImport()">Upload leads CSV/XLSX</button>
@@ -287,6 +288,17 @@
         <input id="callListDate" type="date" />
         <select id="leadAssignRep" style="min-width:180px">
           <option value="">Assign to rep…</option>
+        </select>
+        <select id="leadDefaultCategory" title="Used when the spreadsheet has no Category column" style="min-width:160px">
+          <option value="auto">Category: auto-detect</option>
+          <option value="Restaurant">Category: Restaurant</option>
+          <option value="Coffee Shop">Category: Coffee Shop</option>
+          <option value="Construction">Category: Construction</option>
+          <option value="Golf">Category: Golf</option>
+          <option value="Detailing">Category: Detailing</option>
+          <option value="Retail">Category: Retail</option>
+          <option value="Medical">Category: Medical</option>
+          <option value="Automotive">Category: Automotive</option>
         </select>
         <label style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:0.5px solid #e5e7eb;border-radius:8px;background:#fff;font-size:11px">
           <input id="leadSplitEven" type="checkbox" />
@@ -362,7 +374,7 @@
   <script src="auth-store.js"></script>
   <script src="team-roster-store.js?v=202604271200"></script>
   <script src="crm-store.js?v=202605191400"></script>
-  <script src="lead-categories.js?v=202605191200"></script>
-  <script src="admin-app.js?v=202605191600"></script>
+  <script src="lead-categories.js?v=202605191800"></script>
+  <script src="admin-app.js?v=202605191800"></script>
 </body>
 </html>
