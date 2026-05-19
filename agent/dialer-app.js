@@ -162,39 +162,74 @@
     } catch (e) { return iso; }
   }
 
-  function verticalToTag(vert) {
-    var s = String(vert || '').toLowerCase();
-    /** Visual hint only — real grouping is the stored `vertical` string from Admin/import. */
-    if (s.indexOf('golf') !== -1) return 'tc';
-    if (s.indexOf('coffee') !== -1 || s.indexOf('café') !== -1 || s.indexOf('cafe') !== -1) return 'tr';
-    if (s.indexOf('restaurant') !== -1) return 'tr';
-    if (s.indexOf('contractor') !== -1) return 'tc';
-    return 'td';
+  function normalizeLeadCategory(raw) {
+    if (global.NorthstarLeadCategories && typeof NorthstarLeadCategories.normalize === 'function') {
+      return NorthstarLeadCategories.normalize(raw);
+    }
+    var s = String(raw || '').trim();
+    return s || 'General';
   }
 
-  /** Rebuild Lead queue vertical filter from actual rows (Coffee, Golf, etc. — not a fixed Admin-only list). */
-  function syncLeadVerticalFilterOptions(rows) {
-    var sel = $('leadVertFilter');
-    if (!sel) return;
+  function categoryTagClass(vert) {
+    if (global.NorthstarLeadCategories && typeof NorthstarLeadCategories.tagClass === 'function') {
+      return NorthstarLeadCategories.tagClass(vert);
+    }
+    return 'tag-cat-general';
+  }
+
+  /** Rebuild category filter + chips from assigned leads (Restaurant, Coffee Shop, Construction, …). */
+  function syncLeadCategoryFilters(rows) {
     rows = rows || [];
-    var verts = {};
+    var counts = {};
     rows.forEach(function (r) {
-      var v = String((r && r.vert) || '').trim() || 'General';
-      verts[v] = true;
+      var c = normalizeLeadCategory(r && r.vert);
+      counts[c] = (counts[c] || 0) + 1;
     });
-    var sorted = Object.keys(verts).sort(function (a, b) {
+    var sorted = Object.keys(counts).sort(function (a, b) {
       return a.localeCompare(b, undefined, { sensitivity: 'base' });
     });
     var prev = String(lastLeadFilter || 'all');
-    var html = '<option value="all">All verticals / campaigns</option>';
-    sorted.forEach(function (v) {
-      html += '<option value="' + esc(v) + '">' + esc(v) + '</option>';
-    });
-    sel.innerHTML = html;
-    if (prev === 'all' || verts[prev]) sel.value = prev;
-    else {
-      sel.value = 'all';
-      lastLeadFilter = 'all';
+
+    var sel = $('leadVertFilter');
+    if (sel) {
+      var html = '<option value="all">All categories (' + rows.length + ')</option>';
+      sorted.forEach(function (v) {
+        html += '<option value="' + esc(v) + '">' + esc(v) + ' (' + counts[v] + ')</option>';
+      });
+      sel.innerHTML = html;
+      if (prev === 'all' || counts[prev]) sel.value = prev;
+      else {
+        sel.value = 'all';
+        lastLeadFilter = 'all';
+      }
+    }
+
+    var chips = $('leadCategoryChips');
+    if (chips) {
+      var chipHtml =
+        '<button type="button" class="cat-chip' +
+        (prev === 'all' ? ' on' : '') +
+        '" data-cat="all">All <span class="cat-n">' +
+        rows.length +
+        '</span></button>';
+      sorted.forEach(function (v) {
+        chipHtml +=
+          '<button type="button" class="cat-chip' +
+          (prev === v ? ' on' : '') +
+          '" data-cat="' +
+          esc(v) +
+          '">' +
+          esc(v) +
+          ' <span class="cat-n">' +
+          counts[v] +
+          '</span></button>';
+      });
+      chips.innerHTML = chipHtml;
+      chips.querySelectorAll('.cat-chip').forEach(function (btn) {
+        btn.onclick = function () {
+          filterLeads(btn.getAttribute('data-cat') || 'all');
+        };
+      });
     }
   }
 
@@ -205,9 +240,9 @@
       biz: c.business || 'Unknown',
       name: c.name || '',
       phone: c.phone || '',
-      vert: c.vertical || 'General',
+      vert: normalizeLeadCategory(c.vertical),
       city: c.city || '',
-      tag: verticalToTag(c.vertical),
+      tag: categoryTagClass(c.vertical),
     };
   }
 
@@ -219,9 +254,9 @@
       biz: q.business || 'Unknown',
       name: q.contact_name || '',
       phone: q.phone || '',
-      vert: q.vertical || 'General',
+      vert: normalizeLeadCategory(q.vertical),
       city: q.city || '',
-      tag: verticalToTag(q.vertical),
+      tag: categoryTagClass(q.vertical),
       status: q.status || 'new',
       attempts: Number(q.attempts) || 0,
       nextActionAt: q.next_action_at || null,
@@ -415,14 +450,14 @@
     var hintEl = $('leadQueueHint');
     if (!ll) return;
     var rows = getLeadRows();
-    syncLeadVerticalFilterOptions(rows);
+    syncLeadCategoryFilters(rows);
     var usingDailyList = !!(callQueueLoaded && callQueueRows.length);
     if (!rows.length) {
       ll.innerHTML =
         '<p class="hint" style="margin:0;font-size:11px">No leads available. Ask your manager to import leads or assign you a call list in Admin.</p>';
       if (hintEl) {
         hintEl.textContent =
-          '0 showing · Daily list rows for you, otherwise CRM contacts assigned to you only (unassigned leads stay in Admin until assigned). Use the spreadsheet Vertical column when importing so Coffee vs Golf stay separate.';
+          '0 showing · Daily list rows for you, otherwise CRM contacts assigned to you only. Admin imports should include a Category column (Restaurant, Coffee Shop, Construction, etc.).';
       }
       return;
     }
@@ -430,9 +465,7 @@
     var visibleCount = 0;
     rows.forEach(function (l) {
       if (filter && filter !== 'all') {
-        var lf = String(l.vert || '').toLowerCase();
-        var ff = String(filter || '').toLowerCase();
-        if (lf !== ff) return;
+        if (normalizeLeadCategory(l.vert) !== normalizeLeadCategory(filter)) return;
       }
       var on = l.id === activeLeadId;
       var d = document.createElement('div');
@@ -458,7 +491,7 @@
     });
     if (!visibleCount && rows.length && filter && filter !== 'all') {
       ll.innerHTML =
-        '<p class="hint" style="margin:0;font-size:11px">No leads match this vertical. Switch the dropdown to “All verticals”.</p>';
+        '<p class="hint" style="margin:0;font-size:11px">No leads in this category. Tap <strong>All</strong> or pick another category chip.</p>';
     }
     if (hintEl) {
       var src = usingDailyList
@@ -468,7 +501,7 @@
         visibleCount +
         ' showing · ' +
         src +
-        (filter && filter !== 'all' ? ' · campaign / vertical: ' + filter : '');
+        (filter && filter !== 'all' ? ' · category: ' + filter : '');
     }
   }
 
@@ -832,6 +865,16 @@
 
   function filterLeads(v) {
     renderLeads(v);
+    var chips = $('leadCategoryChips');
+    if (chips) {
+      var f = String(v || 'all');
+      chips.querySelectorAll('.cat-chip').forEach(function (btn) {
+        var on = (btn.getAttribute('data-cat') || '') === f;
+        btn.classList.toggle('on', on);
+      });
+    }
+    var sel = $('leadVertFilter');
+    if (sel && String(sel.value) !== String(v || 'all')) sel.value = v || 'all';
   }
 
   function placeCall() {
@@ -1425,8 +1468,8 @@
 
     $('crmContactsGrid').innerHTML = contacts.map(function (c) {
       var d = String(c.phone || '').replace(/\D/g, '');
-      var vert = String(c.vertical || 'General').trim() || 'General';
-      var tagCls = verticalToTag(vert);
+      var vert = normalizeLeadCategory(c.vertical);
+      var tagCls = categoryTagClass(c.vertical);
       return (
         '<div class="crm-row" onclick="NSDialer.applyContactDial(\'' +
         esc(d) +
@@ -1594,7 +1637,7 @@
         : s.voiceEdge || 'auto';
     $('panel-settings').innerHTML =
       accountPanel +
-      '<div class="panel"><div class="sec-hd">Voice network</div><div class="settings-grid">' +
+      '<motion class="panel"><div class="sec-hd">Voice network</div><div class="settings-grid">' +
       '<div class="set-row"><label>Region</label><select id="setVoiceEdge">' +
       '<option value="auto">Auto — closest to you (recommended overseas)</option>' +
       '<option value="apac">Asia-Pacific (Singapore + Sydney)</option>' +

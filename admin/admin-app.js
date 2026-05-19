@@ -1851,7 +1851,23 @@
         var name = fullName || (firstName || lastName ? (firstName + ' ' + lastName).trim() : '');
         var cleanedPhone = pickPrimaryPhoneFromCanon(canon);
         var city = firstValue(canon, ['city', 'town']);
-        var vertical = firstValue(canon, ['vertical', 'industry']) || 'General';
+        var rawCategory = firstValue(canon, [
+          'category',
+          'vertical',
+          'industry',
+          'type',
+          'campaign',
+          'segment',
+          'leadtype',
+          'leadcampaign',
+          'businesstype',
+        ]);
+        var vertical = 'General';
+        if (typeof NorthstarLeadCategories !== 'undefined' && typeof NorthstarLeadCategories.normalize === 'function') {
+          vertical = NorthstarLeadCategories.normalize(rawCategory);
+        } else if (rawCategory) {
+          vertical = String(rawCategory).trim() || 'General';
+        }
         var stage = firstValue(canon, ['stage']) || 'New';
         if (!business && !cleanedPhone && !name) return null;
         var row = {
@@ -2294,7 +2310,31 @@
     var extra = listSummary
       ? ' Created call list "' + listSummary.name + '" with ' + listSummary.count + ' items.'
       : '';
-    alert('Imported ' + assigned.length + ' leads from ' + file.name + '.' + extra);
+    var catCounts = {};
+    persistedLeads.forEach(function (l) {
+      var v =
+        typeof NorthstarLeadCategories !== 'undefined' && typeof NorthstarLeadCategories.normalize === 'function'
+          ? NorthstarLeadCategories.normalize(l.vertical)
+          : String(l.vertical || 'General').trim() || 'General';
+      catCounts[v] = (catCounts[v] || 0) + 1;
+    });
+    var catLines = Object.keys(catCounts)
+      .sort(function (a, b) {
+        return a.localeCompare(b, undefined, { sensitivity: 'base' });
+      })
+      .map(function (k) {
+        return '  · ' + k + ': ' + catCounts[k];
+      })
+      .join('\n');
+    alert(
+      'Imported ' +
+        assigned.length +
+        ' leads from ' +
+        file.name +
+        '.' +
+        extra +
+        (catLines ? '\n\nCategories:\n' + catLines : '')
+    );
   }
 
   window.exportCrm = function exportCrm() {
