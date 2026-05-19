@@ -26,7 +26,14 @@
     AGENT.smsNumberE164 = seat.smsNumberE164 || '';
     AGENT.pendingSeat = !!seat.pendingSeat;
     AGENT.twilioIdentity = seat.twilioIdentity ? String(seat.twilioIdentity).trim() : '';
-    AGENT.voiceEdge = seat.voiceEdge ? String(seat.voiceEdge).trim().toLowerCase() : 'auto';
+    var edge = 'auto';
+    if (seat.voiceEdge) {
+      edge = String(seat.voiceEdge).trim().toLowerCase();
+    } else if (typeof NorthstarTelephony !== 'undefined' && typeof NorthstarTelephony.getSettings === 'function') {
+      var savedEdge = NorthstarTelephony.getSettings().voiceEdge;
+      if (savedEdge) edge = String(savedEdge).trim().toLowerCase();
+    }
+    AGENT.voiceEdge = edge || 'auto';
     if (typeof NorthstarTelephony.setVoiceEdgePreference === 'function') {
       NorthstarTelephony.setVoiceEdgePreference(AGENT.voiceEdge);
     }
@@ -1724,7 +1731,7 @@
       .catch(function () {});
   }
 
-  function saveSettingsFromDom() {
+  async function saveSettingsFromDom() {
     var voiceEdge = ($('setVoiceEdge') && $('setVoiceEdge').value) || 'auto';
     NorthstarTelephony.saveSettings({
       voiceEdge: voiceEdge,
@@ -1743,10 +1750,24 @@
     if (typeof NorthstarTelephony.setVoiceEdgePreference === 'function') {
       NorthstarTelephony.setVoiceEdgePreference(voiceEdge);
     }
+    AGENT.voiceEdge = voiceEdge;
+    if (typeof NorthstarAuth !== 'undefined' && typeof NorthstarAuth.updateVoiceEdge === 'function') {
+      try {
+        await NorthstarAuth.updateVoiceEdge(voiceEdge);
+      } catch (saveErr) {
+        var msg = saveErr && saveErr.message ? saveErr.message : String(saveErr);
+        alert(
+          'Saved on this browser only — voice region did not sync to your account:\n' +
+            msg +
+            '\n\nAsk your admin to apply migration northstar_profiles_voice_edge if this mentions a missing column.'
+        );
+        return;
+      }
+    }
     if ($('setDesk').checked && typeof Notification !== 'undefined' && Notification.permission === 'default') {
       Notification.requestPermission().catch(function () {});
     }
-    alert('Preferences saved. Hard refresh (Cmd+Shift+R) to apply a voice region change.');
+    alert('Preferences saved to your account. Hard refresh (Cmd+Shift+R) to apply a voice region change.');
   }
 
   function syncCrmNow() {

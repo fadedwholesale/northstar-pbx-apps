@@ -710,9 +710,16 @@
       var raw = '';
       try {
         var prof = global.NorthstarAuth && NorthstarAuth.getProfile ? NorthstarAuth.getProfile() : null;
-        if (prof && prof.voice_edge) raw = String(prof.voice_edge).trim().toLowerCase();
+        if (prof && prof.voice_edge != null && String(prof.voice_edge).trim()) {
+          raw = String(prof.voice_edge).trim().toLowerCase();
+        }
       } catch (_e) {}
-      return raw || state.voiceEdgePreference || Telephony.getSettings().voiceEdge || 'auto';
+      if (!raw) {
+        var localEdge = Telephony.getSettings().voiceEdge;
+        if (localEdge) raw = String(localEdge).trim().toLowerCase();
+      }
+      if (!raw && state.voiceEdgePreference) raw = String(state.voiceEdgePreference).trim().toLowerCase();
+      return raw || 'auto';
     },
 
     answerIncoming: async function () {

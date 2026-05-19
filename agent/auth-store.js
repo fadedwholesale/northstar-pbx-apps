@@ -189,7 +189,10 @@
       initials: initials,
       extension: extension,
       smsNumberE164: profile && profile.sms_number_e164 ? String(profile.sms_number_e164).trim() : '',
-      voiceEdge: profile && profile.voice_edge ? String(profile.voice_edge).trim().toLowerCase() : 'auto',
+      voiceEdge:
+        profile && profile.voice_edge != null && String(profile.voice_edge).trim()
+          ? String(profile.voice_edge).trim().toLowerCase()
+          : null,
       linkedToSeat: !!(rosterRow || (profile && profile.twilio_client_identity)),
       pendingSeat: !(profile && profile.twilio_client_identity),
       profile: profile,
@@ -210,6 +213,33 @@
     profileRow = await withTimeout(fetchProfile(authUser.id), 7000, 'Refresh profile');
     emit();
     return resolveAgent(authUser, profileRow);
+  }
+
+  /** Persist voice region on the employee profile so it survives hard refresh and new devices. */
+  async function updateVoiceEdge(voiceEdge) {
+    var client = getClient();
+    if (!client || !authUser) {
+      return { ok: false, reason: 'not-signed-in' };
+    }
+    var v = String(voiceEdge || 'auto').trim().toLowerCase() || 'auto';
+    var res = await withTimeout(
+      client
+        .from('northstar_profiles')
+        .update({
+          voice_edge: v,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', authUser.id)
+        .select('*')
+        .maybeSingle(),
+      7000,
+      'Save voice region'
+    );
+    if (res.error) throw res.error;
+    if (res.data) profileRow = res.data;
+    else if (profileRow) profileRow.voice_edge = v;
+    emit();
+    return { ok: true, voiceEdge: v, profile: profileRow };
   }
 
   function isAuthLockContention(err) {
@@ -388,6 +418,8 @@
     },
 
     refreshProfile: refreshProfile,
+
+    updateVoiceEdge: updateVoiceEdge,
 
     /** Wire auth listener (login elsewhere / token refresh). */
     attachAuthListener: function (onSeatChange) {
