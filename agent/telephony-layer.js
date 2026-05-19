@@ -105,14 +105,14 @@
   };
 
   /**
-   * Twilio edge presets. Default "auto" = roaming (Global Low Latency — closest edge to the rep).
-   * Overseas employees should use auto/apac; US reps can use us or auto.
+   * Twilio edge presets. Default "auto" = roaming (closest edge to the rep).
+   * Reps outside the US should use auto or apac (Singapore in logs is normal). US-only for US-based reps.
    */
   var VOICE_EDGE_PRESETS = {
     auto: 'roaming',
     roaming: 'roaming',
     us: ['ashburn', 'umatilla'],
-    /** Overseas rep dialing US customers — try US media first, then APAC fallback. */
+    /** Optional: US media first when auto/apac still drops US outbound (may add latency outside US). */
     'us-first': ['ashburn', 'umatilla', 'singapore', 'sydney'],
     apac: ['singapore', 'sydney'],
     eu: ['dublin', 'frankfurt'],

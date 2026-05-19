@@ -1660,14 +1660,14 @@
       accountPanel +
       '<motion class="panel"><div class="sec-hd">Voice network</div><div class="settings-grid">' +
       '<div class="set-row"><label>Region</label><select id="setVoiceEdge">' +
-      '<option value="auto">Auto — closest to you (recommended overseas)</option>' +
-      '<option value="us-first">US first — overseas rep calling US customers</option>' +
-      '<option value="apac">Asia-Pacific (Singapore + Sydney)</option>' +
-      '<option value="us">United States (East + West)</option>' +
+      '<option value="auto">Auto — closest to you (best if you are outside the US)</option>' +
+      '<option value="apac">Asia-Pacific — Singapore + Sydney (recommended outside US)</option>' +
+      '<option value="us-first">US first — optional; only if Auto/APAC still drops US calls</option>' +
+      '<option value="us">United States only (US-based reps)</option>' +
       '<option value="eu">Europe (Dublin + Frankfurt)</option>' +
       '<option value="singapore">Singapore only</option>' +
       '</select></div></div>' +
-      '<p class="hint">If you are overseas but dial US leads all day, try <strong>US first</strong>. Use wired internet, turn off VPN, and stay on this tab during calls. Hard refresh after changing region.</p></div>' +
+      '<p class="hint">This rep is <strong>outside the US</strong> — use <strong>Auto</strong> or <strong>Asia-Pacific</strong>. Singapore in Twilio logs is normal. Fix choppy audio with ethernet, no VPN, and stay on this tab during calls. Hard refresh after changing region.</p></div>' +
       '<div class="panel"><div class="sec-hd">Audio devices</div><div class="settings-grid">' +
       '<div class="set-row"><label>Microphone</label><select id="setMic"><option value="">System default</option></select></div>' +
       '<div class="set-row"><label>Speaker / ringer</label><select id="setSpk"><option value="">System default</option></select></div></div>' +
@@ -1923,7 +1923,7 @@
             wn === 'low-mos'
               ? 'Choppy audio — use wired internet, close VPN, and stay on this tab during the call.'
               : wn === 'high-packets-lost-fraction' || wn === 'high-rtt'
-              ? 'Network dropping voice packets — use ethernet (not Wi‑Fi), turn off VPN, and stay on this tab. Overseas reps calling US: try Settings → Voice region → US first.'
+              ? 'Network dropping voice packets — use ethernet (not Wi‑Fi), turn off VPN, and stay on this tab. If you are outside the US, keep Voice region on Auto or Asia-Pacific (Singapore in logs is expected).'
               : 'Check your internet or headset mic.';
           setVoiceChipState('recover', 'Voice: quality issue', wn + ': ' + hint);
         } else if (ev.payload && ev.payload.phase === 'quality-warning-cleared') {
