@@ -15,6 +15,7 @@
   /** One-time install: when the agent returns to this tab, re-pull CRM so Admin deletes/lists show up without manual "CRM sync". */
   var crmVisibilityRefreshInstalled = false;
   var crmForegroundDebounceTimer = null;
+  var voiceQualityWarningCount = 0;
 
   function applySeat(seat) {
     if (!seat) return;
@@ -1660,12 +1661,13 @@
       '<motion class="panel"><div class="sec-hd">Voice network</div><div class="settings-grid">' +
       '<div class="set-row"><label>Region</label><select id="setVoiceEdge">' +
       '<option value="auto">Auto — closest to you (recommended overseas)</option>' +
+      '<option value="us-first">US first — overseas rep calling US customers</option>' +
       '<option value="apac">Asia-Pacific (Singapore + Sydney)</option>' +
       '<option value="us">United States (East + West)</option>' +
       '<option value="eu">Europe (Dublin + Frankfurt)</option>' +
       '<option value="singapore">Singapore only</option>' +
       '</select></div></div>' +
-      '<p class="hint">Overseas reps: use <strong>Auto</strong> or <strong>Asia-Pacific</strong>. Hard refresh after changing.</p></div>' +
+      '<p class="hint">If you are overseas but dial US leads all day, try <strong>US first</strong>. Use wired internet, turn off VPN, and stay on this tab during calls. Hard refresh after changing region.</p></div>' +
       '<div class="panel"><div class="sec-hd">Audio devices</div><div class="settings-grid">' +
       '<div class="set-row"><label>Microphone</label><select id="setMic"><option value="">System default</option></select></div>' +
       '<div class="set-row"><label>Speaker / ringer</label><select id="setSpk"><option value="">System default</option></select></div></div>' +
@@ -1916,15 +1918,17 @@
           if (wn === 'constant-audio-input-level' || wn === 'constantAudioInputLevel') {
             return;
           }
+          voiceQualityWarningCount++;
           var hint =
             wn === 'low-mos'
               ? 'Choppy audio — use wired internet, close VPN, and stay on this tab during the call.'
               : wn === 'high-packets-lost-fraction' || wn === 'high-rtt'
-              ? 'Network dropping voice packets — switch to ethernet or move closer to your router.'
+              ? 'Network dropping voice packets — use ethernet (not Wi‑Fi), turn off VPN, and stay on this tab. Overseas reps calling US: try Settings → Voice region → US first.'
               : 'Check your internet or headset mic.';
           setVoiceChipState('recover', 'Voice: quality issue', wn + ': ' + hint);
         } else if (ev.payload && ev.payload.phase === 'quality-warning-cleared') {
-          if (typeof NorthstarTelephony.getProviderStatus === 'function') {
+          voiceQualityWarningCount = Math.max(0, voiceQualityWarningCount - 1);
+          if (voiceQualityWarningCount === 0 && typeof NorthstarTelephony.getProviderStatus === 'function') {
             updateVoiceHealthChip(NorthstarTelephony.getProviderStatus());
           }
         }

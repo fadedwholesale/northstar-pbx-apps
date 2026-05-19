@@ -92,7 +92,11 @@
   var pendingVoiceRefreshReason = null;
   var lastVoiceRefreshAt = 0;
   var lastUnregisterHandlerAt = 0;
-  var VOICE_REFRESH_COOLDOWN_MS = 45000;
+  var lastRegisterAttemptAt = 0;
+  var lastCallEndedAt = 0;
+  var VOICE_REFRESH_COOLDOWN_MS = 120000;
+  var REGISTER_ATTEMPT_COOLDOWN_MS = 120000;
+  var POST_CALL_QUIET_MS = 20000;
 
   /** Warnings that fire when idle/silent — not actionable call-quality failures. */
   var IDLE_QUALITY_WARNING_NAMES = {
@@ -108,6 +112,8 @@
     auto: 'roaming',
     roaming: 'roaming',
     us: ['ashburn', 'umatilla'],
+    /** Overseas rep dialing US customers — try US media first, then APAC fallback. */
+    'us-first': ['ashburn', 'umatilla', 'singapore', 'sydney'],
     apac: ['singapore', 'sydney'],
     eu: ['dublin', 'frankfurt'],
     ashburn: 'ashburn',
@@ -184,7 +190,25 @@
   }
 
   function onCallSessionEnded() {
+    lastCallEndedAt = Date.now();
     flushPendingVoiceRefresh();
+  }
+
+  function mayAttemptDeviceRegister() {
+    var now = Date.now();
+    if (now - lastCallEndedAt < POST_CALL_QUIET_MS) return false;
+    if (now - lastRegisterAttemptAt < REGISTER_ATTEMPT_COOLDOWN_MS) return false;
+    if (hasActiveVoiceSession()) return false;
+    return getDeviceStateName() === 'unregistered';
+  }
+
+  function attemptDeviceRegisterOnce(reason) {
+    if (!state.twilioDevice || typeof state.twilioDevice.register !== 'function') return;
+    if (!mayAttemptDeviceRegister()) return;
+    lastRegisterAttemptAt = Date.now();
+    state.twilioDevice.register().catch(function (e) {
+      console.warn('[NorthstarTelephony] register failed (' + (reason || 'retry') + ')', e);
+    });
   }
 
   /** Twilio best practice: resolve mic permission before Device.register. */
@@ -505,12 +529,16 @@
         refreshAccessTokenOnly('device-unregistered-in-call');
         return;
       }
+      /** Post-hangup unregister flicker + token refresh was causing WSTransport register loops. */
+      if (Date.now() - lastCallEndedAt < POST_CALL_QUIET_MS) {
+        return;
+      }
       var now = Date.now();
       if (now - lastUnregisterHandlerAt < VOICE_REFRESH_COOLDOWN_MS) {
         return;
       }
       lastUnregisterHandlerAt = now;
-      refreshAccessTokenOnly('device-unregistered');
+      attemptDeviceRegisterOnce('device-unregistered');
     });
 
     device.on('error', function (error) {
@@ -1046,12 +1074,10 @@
       if (state.twilioDevice && typeof state.twilioDevice.updateToken === 'function') {
         try {
           await state.twilioDevice.updateToken(token);
-          if (!hasActiveVoiceSession() && getDeviceStateName() === 'unregistered') {
-            if (typeof state.twilioDevice.register === 'function') {
-              await state.twilioDevice.register();
-            }
-          }
           syncProviderFromDeviceState();
+          if (!syncProviderFromDeviceState() && !hasActiveVoiceSession()) {
+            attemptDeviceRegisterOnce('token-updated');
+          }
           emit('provider', { mode: state.provider.mode, refreshed: true });
           return token;
         } catch (refreshErr) {
